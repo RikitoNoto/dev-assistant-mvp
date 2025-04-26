@@ -20,7 +20,7 @@ class PlannerBot(Chatbot):
             model="gpt-4o-mini",
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             streaming=True,
-            temperature=0.7,  # 企画アイデアなので少し創造性を持たせる
+            temperature=0.7,
         )
 
     @property
