@@ -45,12 +45,13 @@ class PlannerBot(Chatbot):
 
         ## output
         - 質問がある場合は、最初に[質問]を返してください
+        - 質問がある場合は一つずつ質問を返してください
         - 不明点もなく、完璧な企画になった場合は、最初に[完了]を返してください
         """
 
     async def stream(self, user_message: str):
         response = ""
-        for chunk in super(self).stream(user_message):
+        async for chunk in super().stream(user_message):
             response += chunk
             yield chunk
         self.__last_message = response
