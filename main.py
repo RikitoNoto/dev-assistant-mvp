@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 planner_bot = PlannerBot()
+# planner_bot はセッションごとに作成するのでグローバル変数は削除
 
 
 # 状態の定義
@@ -27,6 +28,8 @@ class AgentState(TypedDict):
 async def run_planner(state: AgentState):
     """PlannerBotを実行するノード"""
     print("--- Running Planner ---")
+    # セッションからPlannerBotを取得
+    planner_bot = cl.user_session.get("planner_bot")
     # 最後のメッセージを取得してPlannerに渡す
     last_message = state["messages"][-1].content
     try:
@@ -76,6 +79,7 @@ async def run_tech_spec(state: AgentState):
     try:
         # ステップ開始を通知
         await cl.Message(content="技術仕様の生成を開始します...").send()
+        tech_spec_bot = cl.user_session.get("tech_spec_bot")
 
         # PlannerBotのチェーンから直接ストリームを取得
         response = ""
@@ -139,8 +143,10 @@ async def start_chat():
     await cl.Message(
         content="こんにちは！どのようなアプリのアイデアがありますか？"
     ).send()
-    global planner_bot
-    planner_bot = PlannerBot()
+    # セッションにPlannerBotとAgentStateの初期状態(None)を保存
+    cl.user_session.set("planner_bot", PlannerBot())
+    cl.user_session.set("tech_spec_bot", TechSpecBot())
+    cl.user_session.set("agent_state", None)
 
 
 @cl.on_message
