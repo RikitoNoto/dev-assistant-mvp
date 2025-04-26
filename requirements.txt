@@ -1,6 +1,7 @@
+chainlit
 langchain
 langchain-openai
 langgraph
-chainlit
+openai
 python-dotenv
 requests

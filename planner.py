@@ -1,7 +1,11 @@
 import os
 from chatbot import Chatbot
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    from langchain.chat_models import ChatOpenAI
 from typing import Optional
 
 load_dotenv()

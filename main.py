@@ -1,180 +1,176 @@
 from typing import TypedDict, Annotated, Sequence
 import operator
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 import chainlit as cl
 
 from planner import PlannerBot
 from tech_spec import TechSpecBot
 
-# 環境変数をロード (必要に応じて)
 from dotenv import load_dotenv
 
 load_dotenv()
-planner_bot = PlannerBot()
-# planner_bot はセッションごとに作成するのでグローバル変数は削除
 
 
-# 状態の定義
+# 状態定義
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
     plan: str
     tech_spec: str
-    is_plan_finished: bool  # Plannerが完了したかどうかのフラグを追加
+    is_plan_finished: bool
 
 
-# ノードの定義 (非同期実行に対応させるため async def に変更)
 async def run_planner(state: AgentState):
-    """PlannerBotを実行するノード"""
     print("--- Running Planner ---")
-    # セッションからPlannerBotを取得
-    planner_bot = cl.user_session.get("planner_bot")
-    # 最後のメッセージを取得してPlannerに渡す
+    planner_bot: PlannerBot = cl.user_session.get("planner_bot")
+    if planner_bot is None:
+        raise RuntimeError("PlannerBotが初期化されていません。")
+
     last_message = state["messages"][-1].content
+    response = ""
+    is_finished = False
+
     try:
-        response = ""
-        msg = cl.Message(content="")
+        msg = cl.Message(content="プランニング中...")
         await msg.send()
+
         async for chunk in planner_bot.stream(last_message):
-            # 受け取ったチャンクをメッセージにストリーミング
             response += chunk
             await msg.stream_token(chunk)
-        state["plan"] = response
-        state["is_plan_finished"] = planner_bot.is_finished()  # 完了状態を記録
 
+        # 進行中メッセージを更新完了
+        await msg.update()
+
+        # # 結果を別メッセージとして表示
+        # result_msg = cl.Message(content=response)
+        # await result_msg.send()
+
+        # 「完了」キーワードを見て強制的にフラグを立てる
+        if "[完了]" in response:
+            is_finished = True
+
+        new_messages = state["messages"] + [AIMessage(content=response)]
+
+        return {
+            **state,
+            "messages": new_messages,
+            "plan": response,
+            "is_plan_finished": is_finished,
+        }
     except Exception as e:
         print(f"Error in Planner: {e}")
-        await cl.Message(
-            content=f"プランナーの実行中にエラーが発生しました: {e}"
-        ).send()
-        # エラーが発生した場合、以降の処理をスキップするために state を変更するか、
-        # 例外を投げて LangGraph のエラーハンドリングに任せる (設定が必要)
-        # ここでは tech_spec を空にしておく
-        state["plan"] = "プランニング中にエラーが発生しました。"
-        state["tech_spec"] = ""  # エラー時は Tech Spec を実行しない想定
-        state["is_plan_finished"] = False  # エラー時は未完了扱い
-    return state
+        await cl.Message(content=f"プランナーエラー: {e}").send()
+        return {
+            **state,
+            "plan": "プランニング失敗",
+            "tech_spec": "",
+            "is_plan_finished": False,
+        }
 
 
 async def run_tech_spec(state: AgentState):
-    """TechSpecBotを実行するノード"""
-    # プランニングでエラーが発生していたらスキップ (このチェックは不要になるかも)
-    # if not state["plan"] or "エラーが発生しました" in state["plan"]:
-    #     print("--- Skipping Tech Spec due to previous error ---")
-    #     state["tech_spec"] = "プランニングのエラーによりスキップされました。"
-    #     await cl.Message(
-    #         content="プランニングでエラーが発生したため、技術仕様の生成をスキップします。"
-    #     ).send()
-    #     return state
-
     print("--- Running Tech Spec ---")
-    tech_spec_bot = TechSpecBot()
-    plan = state["plan"]
-    # [完了] プレフィックスを除去して TechSpec に渡す
-    plan_content = plan.replace("[完了]", "").strip()
-    tech_spec_input = (
-        f"以下の企画に基づいて技術仕様を作成してください:\n\n{plan_content}"
-    )
-    try:
-        # ステップ開始を通知
-        await cl.Message(content="技術仕様の生成を開始します...").send()
-        tech_spec_bot = cl.user_session.get("tech_spec_bot")
+    tech_spec_bot: TechSpecBot = cl.user_session.get("tech_spec_bot")
+    if tech_spec_bot is None:
+        raise RuntimeError("TechSpecBotが初期化されていません。")
 
-        # PlannerBotのチェーンから直接ストリームを取得
-        response = ""
-        msg = cl.Message(content="")
+    plan_content = state["plan"].replace("[完了]", "").strip()
+    response = ""
+    try:
+        msg = cl.Message(content="技術仕様作成中...")
         await msg.send()
-        async for chunk in tech_spec_bot.stream(tech_spec_input):
-            # 受け取ったチャンクをメッセージにストリーミング
+
+        async for chunk in tech_spec_bot.stream(plan_content):
             response += chunk
             await msg.stream_token(chunk)
-        state["tech_spec"] = response
+
+        # 完了メッセージを明示的に送信
+        await msg.update()
+
+        # # 技術仕様の結果を別のメッセージとして表示
+        # result_msg = cl.Message(content=response)
+        # await result_msg.send()
+
+        new_messages = state["messages"] + [AIMessage(content=response)]
+
+        return {
+            **state,
+            "messages": new_messages,
+            "tech_spec": response,
+        }
     except Exception as e:
         print(f"Error in Tech Spec: {e}")
-        await cl.Message(content=f"技術仕様の生成中にエラーが発生しました: {e}").send()
-        state["tech_spec"] = "技術仕様の生成中にエラーが発生しました。"
+        await cl.Message(content=f"技術仕様エラー: {e}").send()
+        return {
+            **state,
+            "tech_spec": "技術仕様生成失敗",
+        }
 
-    return state
 
-
-# 条件分岐用の関数
 def should_run_tech_spec(state: AgentState) -> str:
-    """Plannerの結果に基づいてTech Specを実行するかどうかを決定"""
-    print(f"--- Checking if plan is finished: {state['is_plan_finished']} ---")
-    if state["is_plan_finished"]:
-        # プランニングが完了していればTech Specへ
-        return "tech"
-    else:
-        # プランニングが未完了（質問など）の場合はグラフを終了し、ユーザーの入力を待つ
-        return END  # "planner" から END に変更
+    print(f"--- is_plan_finished: {state['is_plan_finished']} ---")
+    return "tech" if state["is_plan_finished"] else END
 
 
-# グラフの構築 (非同期ノードを使用)
+# グラフ作成
 workflow = StateGraph(AgentState)
-
-# ノードを追加
 workflow.add_node("planner", run_planner)
 workflow.add_node("tech", run_tech_spec)
 
-# エッジを追加
 workflow.add_conditional_edges(
-    "planner",  # 開始ノード
-    should_run_tech_spec,  # 条件分岐関数
-    {
-        "tech": "tech",  # 条件分岐関数が "tech" を返した場合、tech ノードへ
-        END: END,  # 条件分岐関数が END を返した場合（プラン未完了含む）、終了
-    },
+    "planner", should_run_tech_spec, {"tech": "tech", END: END}
 )
-workflow.add_edge("tech", END)  # TechSpecの後に終了
+workflow.add_edge("tech", END)
 
-# 開始点を設定
 workflow.set_entry_point("planner")
-
-# グラフをコンパイル
-# 非同期実行のため acompile を使うのが望ましいが、
-# LangGraph のバージョンによっては compile で非同期ノードも扱える
 app = workflow.compile()
 
 
 @cl.on_chat_start
 async def start_chat():
-    """チャット開始時の処理"""
-    await cl.Message(
-        content="こんにちは！どのようなアプリのアイデアがありますか？"
-    ).send()
-    # セッションにPlannerBotとAgentStateの初期状態(None)を保存
+    await cl.Message(content="こんにちは！アイデアを教えてください！").send()
     cl.user_session.set("planner_bot", PlannerBot())
     cl.user_session.set("tech_spec_bot", TechSpecBot())
-    cl.user_session.set("agent_state", None)
 
 
 @cl.on_message
 async def main(message: cl.Message):
-    """ユーザーからのメッセージ受信時の処理"""
     user_input = message.content
     if not user_input:
         return
 
-    # グラフ実行の準備
-    initial_state = AgentState(  # AgentStateで初期化
-        messages=[HumanMessage(content=user_input)],
-        plan="",
-        tech_spec="",
-        is_plan_finished=False,  # 初期値は False
-    )
+    # ここでセッションから前回の状態を取る
+    previous_state = cl.user_session.get("agent_state")
 
-    final_state = None  # 最終状態を保持する変数
-    # LangGraphワークフローを非同期で実行し、イベントを処理
-    async for event in app.astream(initial_state):
-        # print(event) # デバッグ用
-        # 最終状態を取得 (ENDに到達したときの state)
-        # LangGraphのバージョンやイベント構造によってキーが異なる可能性がある
-        if event.get("event") == "on_chain_end" or event.get("event") == "on_graph_end":
-            output = event.get("data", {}).get("output")
-            # outputがAgentStateの形式であることを確認
-            if isinstance(output, dict) and "messages" in output:
-                final_state = output
+    if previous_state is None:
+        # セッションに何もなければ新規作成
+        agent_state = AgentState(
+            messages=[HumanMessage(content=user_input)],
+            plan="",
+            tech_spec="",
+            is_plan_finished=False,
+        )
+    else:
+        # 前回のmessagesに追記していく
+        agent_state = {
+            **previous_state,
+            "messages": previous_state["messages"] + [HumanMessage(content=user_input)],
+        }
 
+    final_state = None
 
-# Chainlitアプリケーションを実行するためのコマンド: chainlit run main.py -w
+    # グラフ実行
+    final_state = agent_state  # 初期値として現在の状態を設定
+    async for event in app.astream(agent_state):
+        # 各ノードの実行後の状態を取得
+        if isinstance(event, dict):
+            if event.get("planner"):
+                final_state = event["planner"]
+            elif event.get("tech"):
+                final_state = event["tech"]
+
+    print(f"Final State: {final_state}")
+    if final_state:
+        # セッションに保存（次回使うため）
+        cl.user_session.set("agent_state", final_state)
