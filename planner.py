@@ -1,7 +1,8 @@
 import os
 from chatbot import Chatbot
-from langchain.chat_models.openai import ChatOpenAI
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from typing import Optional
 
 load_dotenv()
 
@@ -10,6 +11,10 @@ class PlannerBot(Chatbot):
     """
     プロダクト企画を支援するチャットボットクラス。
     """
+
+    def __init__(self):
+        super().__init__()
+        self.__last_message: Optional[str] = None
 
     @property
     def _model(self):
@@ -35,6 +40,25 @@ class PlannerBot(Chatbot):
         - ターゲット
         - 提供する価値
         - メッセージ
-        - MVPで作成するもの
+        - MVPで作成するもの(対応するプラットフォームを含む)
         - 将来的に追加する機能
+
+        ## output
+        - 質問がある場合は、最初に[質問]を返してください
+        - 不明点もなく、完璧な企画になった場合は、最初に[完了]を返してください
         """
+
+    async def stream(self, user_message: str):
+        response = ""
+        for chunk in super(self).stream(user_message):
+            response += chunk
+            yield chunk
+        self.__last_message = response
+
+    def is_finished(self) -> bool:
+        """
+        企画が完了したかどうかを判定するメソッド。
+        """
+        if self.__last_message is None:
+            return False
+        return self.__last_message.startswith("[完了]")

@@ -1,13 +1,15 @@
 import chainlit as cl
-from planner import PlannerBot  # planner.py から PlannerBot をインポート
+from planner import PlannerBot
+from tech_spec import TechSpecBot
+
 from dotenv import load_dotenv
-import asyncio
 
 # .envファイルから環境変数を読み込む (PlannerBot内でも読み込まれるが念のため)
 load_dotenv()
 
 # グローバルなPlannerBotインスタンス
-planner_bot = None
+bot = TechSpecBot()
+initial_message = "こんにちは！企画と好みの技術スタックを教えてください"
 
 
 @cl.on_chat_start
@@ -15,13 +17,8 @@ async def start_chat():
     """
     チャット開始時の処理。PlannerBotインスタンスを作成します。
     """
-    global planner_bot
     try:
-        # PlannerBotのインスタンスを作成
-        planner_bot = PlannerBot()
-        await cl.Message(
-            content="こんにちは！プロダクトの企画について、どのようなことを考えましょうか？"
-        ).send()
+        await cl.Message(content=initial_message).send()
     except ValueError as e:
         # APIキーがない場合などの初期化エラー
         await cl.Message(content=f"ボットの初期化中にエラーが発生しました: {e}").send()
@@ -38,8 +35,7 @@ async def main(message: cl.Message):
     ユーザーからのメッセージ受信時の処理。
     PlannerBotのチェーンを使用してストリーミング応答を生成します。
     """
-    global planner_bot
-    if planner_bot is None:
+    if bot is None:
         await cl.Message(
             content="ボットが初期化されていません。チャットを開始し直してください。"
         ).send()
@@ -54,7 +50,7 @@ async def main(message: cl.Message):
     await msg.send()
 
     # PlannerBotのチェーンから直接ストリームを取得
-    async for chunk in planner_bot.stream(user_input):
+    async for chunk in bot.stream(user_input):
         # 受け取ったチャンクをメッセージにストリーミング
         await msg.stream_token(chunk)
 
