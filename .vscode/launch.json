@@ -36,5 +36,20 @@
         "-w"
       ]
     },
+    {
+      "name": "API run",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/src/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+      },
+      "args": [
+        "api:app",
+        "--reload",
+      ]
+    },
   ]
 }
