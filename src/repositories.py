@@ -8,7 +8,7 @@ from models import Document  # src/models.py から Document をインポート
 
 class DocumentRepository(ABC):
     """
-    企画ドキュメントのデータ永続化を担当するリポジトリの抽象基底クラス。
+    ドキュメントのデータ永続化を担当するリポジトリの抽象基底クラス。
     """
 
     @abstractmethod
@@ -28,7 +28,23 @@ class DocumentRepository(ABC):
         pass
 
 
-class DynamoDbDocumentRepository(DocumentRepository):
+class PlanDocumentRepository(DocumentRepository):
+    """
+    企画ドキュメントのデータ永続化を担当する抽象リポジトリクラス。
+    """
+
+    pass
+
+
+class TechSpecDocumentRepository(DocumentRepository):
+    """
+    技術仕様書のデータ永続化を担当する抽象リポジトリクラス。
+    """
+
+    pass
+
+
+class DynamoDbDocumentRepository(PlanDocumentRepository, TechSpecDocumentRepository):
     """
     DynamoDBを使用して企画ドキュメントのデータ永続化を担当する具象リポジトリクラス。
     """

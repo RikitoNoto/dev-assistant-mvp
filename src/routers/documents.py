@@ -1,6 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from models import Document
-from repositories import DocumentRepository
+from repositories import (
+    DocumentRepository,
+    PlanDocumentRepository,
+    TechSpecDocumentRepository,
+)
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,
@@ -9,7 +13,10 @@ from routers.utils import (
 router = APIRouter()
 
 
-async def _save_or_update_document(document: Document, repo: DocumentRepository):
+def _save_or_update_document(
+    document: Document,
+    repo: DocumentRepository,
+) -> dict:
     """Helper function to save or update a document."""
     try:
         doc_id = repo.save_or_update(document)
@@ -21,22 +28,22 @@ async def _save_or_update_document(document: Document, repo: DocumentRepository)
 
 
 @router.post("/plan")
-async def save_or_update_planning_document(
+def save_or_update_planning_document(
     document: Document,
-    repo: DocumentRepository = Depends(get_plan_document_repository),
+    repo: PlanDocumentRepository = Depends(get_plan_document_repository),
 ):
     """
     Saves a new planning document or updates an existing one using the DocumentRepository.
     """
-    return await _save_or_update_document(document, repo)
+    return _save_or_update_document(document, repo)
 
 
 @router.post("/tech-spec")
-async def save_or_update_tech_spec_document(
+def save_or_update_tech_spec_document(
     document: Document,
-    repo: DocumentRepository = Depends(get_tech_spec_document_repository),
+    repo: TechSpecDocumentRepository = Depends(get_tech_spec_document_repository),
 ):
     """
     Saves a new technical specification document or updates an existing one using the DocumentRepository.
     """
-    return await _save_or_update_document(document, repo)
+    return _save_or_update_document(document, repo)
