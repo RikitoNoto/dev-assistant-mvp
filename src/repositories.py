@@ -1,18 +1,39 @@
+from typing import Optional
 import uuid
 import boto3
+from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
 from models import Document  # src/models.py から Document をインポート
 
 
-class DocumentRepository:
+class DocumentRepository(ABC):
     """
-    企画ドキュメントのデータ永続化を担当するリポジトリクラス。
-    DynamoDBとのインタラクションをカプセル化します。
+    企画ドキュメントのデータ永続化を担当するリポジトリの抽象基底クラス。
     """
 
-    TABLE_NAME = "PlanningDocuments"
+    @abstractmethod
+    def save_or_update(self, document: Document) -> str:
+        """
+        企画ドキュメントを永続化ストレージに保存または更新します。
 
-    def __init__(self, dynamodb_resource=None):
+        Args:
+            document: 保存または更新するDocumentオブジェクト。
+
+        Returns:
+            保存または更新されたドキュメントのID。
+
+        Raises:
+            Exception: 永続化処理中にエラーが発生した場合。
+        """
+        pass
+
+
+class DynamoDbDocumentRepository(DocumentRepository):
+    """
+    DynamoDBを使用して企画ドキュメントのデータ永続化を担当する具象リポジトリクラス。
+    """
+
+    def __init__(self, table_name: str, dynamodb_resource=None):
         """
         リポジトリを初期化します。
         外部からDynamoDBリソースを注入できるようにします（テスト容易性のため）。
@@ -29,7 +50,7 @@ class DocumentRepository:
                 aws_access_key_id="dummy",
                 aws_secret_access_key="dummy",
             )
-        self._table = self._dynamodb.Table(self.TABLE_NAME)
+        self._table = self._dynamodb.Table(table_name)
 
     def initialize_table(self):
         """

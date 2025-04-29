@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from routers import chat, documents
-from routers.utils import get_document_repository
+from routers.utils import get_plan_document_repository
 
 app = FastAPI()
 
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     import uvicorn
 
     # Initialize repository (consider moving this to startup event if needed)
-    repo = get_document_repository()
+    repo = get_plan_document_repository()
     repo.initialize_table()
 
     uvicorn.run(app, host="0.0.0.0", port=8888)
