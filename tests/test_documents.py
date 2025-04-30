@@ -1,12 +1,12 @@
-from typing import Optional
-import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
 # テスト対象のFastAPIアプリケーションをインポート
 from api import app
 from models import Document
-from repositories import DocumentRepository  # Fakeが継承するため、またはモックのspec用
+from repositories.documents import (
+    DocumentRepository,
+)  # Fakeが継承するため、またはモックのspec用
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,
@@ -36,6 +36,9 @@ class FakeDocumentRepository(DocumentRepository):
     def clear(self):
         self._documents = {}
 
+    def initialize(self, *args, **kwargs):
+        return super().initialize(*args, **kwargs)
+
 
 # --- テストクラス ---
 
@@ -59,10 +62,11 @@ class TestPlanningDocumentAPI:
     def save_or_update(
         self,
         content: str,
-        project_id: Optional[str] = None,
+        project_id: str,  # project_id は必須に変更
         status_code: int = 200,
     ) -> dict:
         """APIを呼び出すヘルパーメソッド"""
+        # project_id は常に渡される想定
         document_data = {"project_id": project_id, "content": content}
         response = self.client.post("/documents/plan", json=document_data)
         assert response.status_code == status_code
@@ -184,10 +188,11 @@ class TestTechSpecDocumentAPI:
     def save_or_update(
         self,
         content: str,
-        project_id: Optional[str] = None,
+        project_id: str,  # project_id は必須に変更
         status_code: int = 200,
     ) -> dict:
         """APIを呼び出すヘルパーメソッド"""
+        # project_id は常に渡される想定
         document_data = {"project_id": project_id, "content": content}
         response = self.client.post("/documents/tech-spec", json=document_data)
         assert response.status_code == status_code

@@ -1,15 +1,22 @@
 from typing import Optional
-import uuid
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models import Document  # src/models.py から Document をインポート
+from models import Document
 
 
 class DocumentRepository(ABC):
     """
     ドキュメントのデータ永続化を担当するリポジトリの抽象基底クラス。
     """
+
+    @abstractmethod
+    def initialize(self, *args, **kwargs):
+        """
+        リポジトリを初期化します。
+        具体的な実装に応じて、必要な初期化処理を行います。
+        """
+        pass
 
     @abstractmethod
     def save_or_update(self, document: Document) -> str:
@@ -87,7 +94,7 @@ class DynamoDbDocumentRepository(
             )
         self._table = self._dynamodb.Table(table_name)
 
-    def initialize_table(self):
+    def initialize(self, table_name: str):
         """
         DynamoDBテーブルが存在しない場合に作成します。
         アプリケーション起動時に呼び出すことを想定しています。
@@ -95,7 +102,7 @@ class DynamoDbDocumentRepository(
         try:
             # テーブル名をクラス変数から取得
             table = self._dynamodb.create_table(
-                TableName=self.TABLE_NAME,
+                TableName=table_name,
                 KeySchema=[
                     {"AttributeName": "project_id", "KeyType": "HASH"},
                 ],
@@ -104,16 +111,16 @@ class DynamoDbDocumentRepository(
                 ],
                 ProvisionedThroughput={"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
             )
-            print(f"Table '{self.TABLE_NAME}' created successfully.")
+            print(f"Table '{table_name}' created successfully.")
             # テーブルが利用可能になるまで待機
             table.wait_until_exists()
-            print(f"Table '{self.TABLE_NAME}' is now active.")
+            print(f"Table '{table_name}' is now active.")
             self._table = table  # 作成したテーブルオブジェクトをインスタンス変数に設定
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceInUseException":
-                print(f"Table '{self.TABLE_NAME}' already exists.")
+                print(f"Table '{table_name}' already exists.")
                 # 既存のテーブルオブジェクトを取得
-                self._table = self._dynamodb.Table(self.TABLE_NAME)
+                self._table = self._dynamodb.Table(table_name)
             else:
                 print(f"Error creating table: {e}")
                 raise
@@ -131,13 +138,8 @@ class DynamoDbDocumentRepository(
         Raises:
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
+        # project_id は Document オブジェクトに必ず含まれるため、None チェックは不要
         project_id = document.project_id
-        if project_id is None:
-            # 新規作成の場合はUUIDを生成
-            project_id = str(uuid.uuid4())
-            document.project_id = (
-                project_id  # 生成したIDをドキュメントオブジェクトにも設定
-            )
 
         try:
             self._table.put_item(
@@ -145,7 +147,7 @@ class DynamoDbDocumentRepository(
             )
             return project_id
         except ClientError as e:
-            print(f"Error saving/updating document (ID: {project_id}): {e}")
+            print(f"Error saving/updating document (ID: {document.project_id}): {e}")
             raise Exception(
                 f"Failed to save/update document: {e.response['Error']['Message']}"
             ) from e
