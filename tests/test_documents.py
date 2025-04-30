@@ -36,6 +36,9 @@ class FakeDocumentRepository(DocumentRepository):
     def clear(self):
         self._documents = {}
 
+    def initialize(self, *args, **kwargs):
+        return super().initialize(*args, **kwargs)
+
 
 # --- テストクラス ---
 

@@ -1,4 +1,6 @@
+from datetime import datetime
 from pydantic import BaseModel
+from uuid import UUID, uuid4
 
 
 class Document(BaseModel):
@@ -18,16 +20,21 @@ class UserMessage(BaseModel):
     message: str
 
 
-from uuid import UUID, uuid4
-from datetime import datetime
-
-
 class Project(BaseModel):
     """
     プロジェクトを表すデータモデル。
     """
 
-    project_id: UUID = uuid4()
+    def __init__(self, **data):
+        if "project_id" not in data:
+            data["project_id"] = str(uuid4())
+        if "created_at" not in data:
+            data["created_at"] = datetime.now()
+        if "updated_at" not in data:
+            data["updated_at"] = datetime.now()
+        super().__init__(**data)
+
+    project_id: UUID
     title: str
-    created_at: datetime = datetime.now()
-    updated_at: datetime = datetime.now()
+    created_at: datetime
+    updated_at: datetime

@@ -13,14 +13,6 @@ class ProjectRepository(ABC):
     """
 
     @abstractmethod
-    def initialize(self, *args, **kwargs):
-        """
-        リポジトリを初期化します。
-        具体的な実装に応じて、必要な初期化処理を行います。
-        """
-        pass
-
-    @abstractmethod
     def save_or_update(self, project: Project) -> UUID:
         """
         プロジェクトを永続化ストレージに保存または更新します。
