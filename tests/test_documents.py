@@ -4,7 +4,9 @@ from unittest.mock import MagicMock
 # テスト対象のFastAPIアプリケーションをインポート
 from api import app
 from models import Document
-from repositories import DocumentRepository  # Fakeが継承するため、またはモックのspec用
+from repositories.documents import (
+    DocumentRepository,
+)  # Fakeが継承するため、またはモックのspec用
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,

@@ -1,4 +1,4 @@
-from repositories import (
+from repositories.documents import (
     PlanDocumentRepository,
     TechSpecDocumentRepository,
     DynamoDbDocumentRepository,

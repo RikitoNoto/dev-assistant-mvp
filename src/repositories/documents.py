@@ -1,9 +1,8 @@
 from typing import Optional
-import uuid
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models import Document  # src/models.py から Document をインポート
+from models import Document
 
 
 class DocumentRepository(ABC):
