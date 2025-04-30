@@ -131,13 +131,8 @@ class DynamoDbDocumentRepository(
         Raises:
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
+        # project_id は Document オブジェクトに必ず含まれるため、None チェックは不要
         project_id = document.project_id
-        if project_id is None:
-            # 新規作成の場合はUUIDを生成
-            project_id = str(uuid.uuid4())
-            document.project_id = (
-                project_id  # 生成したIDをドキュメントオブジェクトにも設定
-            )
 
         try:
             self._table.put_item(
@@ -145,7 +140,7 @@ class DynamoDbDocumentRepository(
             )
             return project_id
         except ClientError as e:
-            print(f"Error saving/updating document (ID: {project_id}): {e}")
+            print(f"Error saving/updating document (ID: {document.project_id}): {e}")
             raise Exception(
                 f"Failed to save/update document: {e.response['Error']['Message']}"
             ) from e

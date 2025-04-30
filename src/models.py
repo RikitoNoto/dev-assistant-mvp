@@ -6,7 +6,7 @@ class Document(BaseModel):
     企画ドキュメントを表すデータモデル。
     """
 
-    project_id: str | None = None  # 更新時はIDを指定、新規作成時はNone
+    project_id: str
     content: str
 
 
