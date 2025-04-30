@@ -11,6 +11,14 @@ class DocumentRepository(ABC):
     """
 
     @abstractmethod
+    def initialize(self, *args, **kwargs):
+        """
+        リポジトリを初期化します。
+        具体的な実装に応じて、必要な初期化処理を行います。
+        """
+        pass
+
+    @abstractmethod
     def save_or_update(self, document: Document) -> str:
         """
         企画ドキュメントを永続化ストレージに保存または更新します。
@@ -86,7 +94,7 @@ class DynamoDbDocumentRepository(
             )
         self._table = self._dynamodb.Table(table_name)
 
-    def initialize_table(self):
+    def initialize(self, table_name: str):
         """
         DynamoDBテーブルが存在しない場合に作成します。
         アプリケーション起動時に呼び出すことを想定しています。
@@ -94,7 +102,7 @@ class DynamoDbDocumentRepository(
         try:
             # テーブル名をクラス変数から取得
             table = self._dynamodb.create_table(
-                TableName=self.TABLE_NAME,
+                TableName=table_name,
                 KeySchema=[
                     {"AttributeName": "project_id", "KeyType": "HASH"},
                 ],
@@ -103,16 +111,16 @@ class DynamoDbDocumentRepository(
                 ],
                 ProvisionedThroughput={"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
             )
-            print(f"Table '{self.TABLE_NAME}' created successfully.")
+            print(f"Table '{table_name}' created successfully.")
             # テーブルが利用可能になるまで待機
             table.wait_until_exists()
-            print(f"Table '{self.TABLE_NAME}' is now active.")
+            print(f"Table '{table_name}' is now active.")
             self._table = table  # 作成したテーブルオブジェクトをインスタンス変数に設定
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceInUseException":
-                print(f"Table '{self.TABLE_NAME}' already exists.")
+                print(f"Table '{table_name}' already exists.")
                 # 既存のテーブルオブジェクトを取得
-                self._table = self._dynamodb.Table(self.TABLE_NAME)
+                self._table = self._dynamodb.Table(table_name)
             else:
                 print(f"Error creating table: {e}")
                 raise

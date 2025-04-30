@@ -16,3 +16,18 @@ class UserMessage(BaseModel):
     """
 
     message: str
+
+
+from uuid import UUID, uuid4
+from datetime import datetime
+
+
+class Project(BaseModel):
+    """
+    プロジェクトを表すデータモデル。
+    """
+
+    project_id: UUID = uuid4()
+    title: str
+    created_at: datetime = datetime.now()
+    updated_at: datetime = datetime.now()
