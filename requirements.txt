@@ -5,3 +5,4 @@ langgraph
 openai
 python-dotenv
 requests
+boto3

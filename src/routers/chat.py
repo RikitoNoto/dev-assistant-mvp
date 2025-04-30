@@ -1,0 +1,86 @@
+import json
+from chatbot import Chatbot
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from planner import PlannerBot
+from tech_spec import TechSpecBot
+from models import UserMessage
+
+router = APIRouter()
+
+
+async def process_stream(bot: Chatbot, message: str):
+    """
+    Processes the bot stream and yields JSON chunks.
+    Detects the separator '===============' to switch keys.
+    """
+    buffer = ""
+    is_file_content = False
+    separator = "==============="
+
+    async for chunk in bot.stream(message):
+        buffer += chunk
+
+        while True:
+            if is_file_content:
+                # If we are in file content mode, yield the entire buffer as file content
+                if buffer:
+                    yield json.dumps({"file": buffer}, ensure_ascii=False) + "\\n"
+                    buffer = ""
+                # Since we yielded the whole buffer, break the inner loop
+                break
+
+            separator_index = buffer.find(separator)
+            if separator_index != -1:
+                # Yield the part before the separator as a message
+                message_part = buffer[:separator_index]
+                if message_part:
+                    yield json.dumps(
+                        {"message": message_part}, ensure_ascii=False
+                    ) + "\\n"
+
+                # Remove the message part and the separator from the buffer
+                buffer = buffer[separator_index + len(separator) :]
+                # Remove leading newline if present after separator
+                if buffer.startswith("\\n"):
+                    buffer = buffer[1:]
+
+                # Switch to file content mode
+                is_file_content = True
+                # Continue the inner loop to process the remaining buffer in file mode immediately
+                continue  # Explicitly continue to re-evaluate the buffer in the new mode
+            else:
+                # If no separator is found and not in file content mode,
+                # yield the entire buffer as a message if it's not empty
+                if buffer and not is_file_content:
+                    yield json.dumps({"message": buffer}, ensure_ascii=False) + "\\n"
+                    buffer = ""  # Clear buffer after yielding
+                # Break the inner loop as there's nothing more to process without a separator
+                break
+
+    # After the stream ends, yield any remaining buffer content
+    if buffer:
+        key = "file" if is_file_content else "message"
+        yield json.dumps({key: buffer}, ensure_ascii=False) + "\\n"
+
+
+@router.post("/plan/stream")
+async def chat_plan_stream(user_message: UserMessage):
+    """
+    Stream chat responses from PlannerBot in JSON format (ndjson).
+    """
+    bot = PlannerBot()
+    return StreamingResponse(
+        process_stream(bot, user_message.message), media_type="application/x-ndjson"
+    )
+
+
+@router.post("/tech-spec/stream")
+async def chat_tech_spec_stream(user_message: UserMessage):
+    """
+    Stream chat responses from TechSpecBot in JSON format (ndjson).
+    """
+    bot = TechSpecBot()
+    return StreamingResponse(
+        process_stream(bot, user_message.message), media_type="application/x-ndjson"
+    )

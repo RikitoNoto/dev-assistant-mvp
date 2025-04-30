@@ -1,45 +1,19 @@
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from planner import PlannerBot
-from pydantic import BaseModel
-from tech_spec import TechSpecBot
+from routers import chat, documents
+from routers.utils import get_plan_document_repository
 
 app = FastAPI()
 
-
-class UserMessage(BaseModel):
-    message: str
-
-
-@app.post("/chat/plan/stream")
-async def chat_plan_stream(user_message: UserMessage):
-    """
-    Stream chat responses from PlannerBot.
-    """
-    bot = PlannerBot()
-
-    async def generate_stream():
-        async for chunk in bot.stream(user_message.message):
-            yield chunk
-
-    return StreamingResponse(generate_stream(), media_type="text/plain")
-
-
-@app.post("/chat/tech-spec/stream")
-async def chat_tech_spec_stream(user_message: UserMessage):
-    """
-    Stream chat responses from TechSpecBot.
-    """
-    bot = TechSpecBot()
-
-    async def generate_stream():
-        async for chunk in bot.stream(user_message.message):
-            yield chunk
-
-    return StreamingResponse(generate_stream(), media_type="text/plain")
+# Include routers
+app.include_router(chat.router, prefix="/chat", tags=["chat"])
+app.include_router(documents.router, prefix="/documents", tags=["documents"])
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    # Initialize repository (consider moving this to startup event if needed)
+    repo = get_plan_document_repository()
+    repo.initialize_table()
+
+    uvicorn.run(app, host="0.0.0.0", port=8888)
