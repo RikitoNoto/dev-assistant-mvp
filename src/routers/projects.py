@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List
-from uuid import UUID
+
+# from uuid import UUID # UUID を削除
 from pydantic import BaseModel
 from models import Project, Document
 from repositories.projects import ProjectRepository
@@ -35,8 +36,9 @@ def create_project(
     """
     try:
         new_project = Project(title=project_data.title)
-        project_uuid = repo.save_or_update(new_project)
-        project_id_str = str(project_uuid)
+        # save_or_update は string ID を返すようになった
+        project_id_str = repo.save_or_update(new_project)
+        # project_id_str = str(project_uuid) # 不要になった
 
         plan_doc = Document(project_id=project_id_str, content="")
         plan_doc_repo.save_or_update(plan_doc)
@@ -44,7 +46,8 @@ def create_project(
         tech_spec_doc = Document(project_id=project_id_str, content="")
         tech_spec_doc_repo.save_or_update(tech_spec_doc)
 
-        created_project = repo.get_by_id(project_uuid)
+        # get_by_id も string ID を受け付ける
+        created_project = repo.get_by_id(project_id_str)
         if created_project is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -78,14 +81,14 @@ def get_all_projects(
 
 @router.get("/{project_id}", response_model=Project)
 def get_project_by_id(
-    project_id: UUID,
+    project_id: str,  # UUID から str に変更
     repo: ProjectRepository = Depends(get_project_repository),
 ):
     """
     指定されたIDのプロジェクトを取得します。
     """
     try:
-        project = repo.get_by_id(project_id)
+        project = repo.get_by_id(project_id)  # get_by_id は string ID を受け付ける
         if project is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -103,7 +106,7 @@ def get_project_by_id(
 
 @router.put("/{project_id}", response_model=Project)
 def update_project(
-    project_id: UUID,
+    project_id: str,  # UUID から str に変更
     project_data: ProjectUpdate,
     repo: ProjectRepository = Depends(get_project_repository),
 ):
@@ -111,7 +114,9 @@ def update_project(
     指定されたIDのプロジェクトを更新します。
     """
     try:
-        existing_project = repo.get_by_id(project_id)
+        existing_project = repo.get_by_id(
+            project_id
+        )  # get_by_id は string ID を受け付ける
         if existing_project is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -120,8 +125,11 @@ def update_project(
 
         existing_project.title = project_data.title
 
-        updated_project_id = repo.save_or_update(existing_project)
-        updated_project = repo.get_by_id(updated_project_id)
+        # save_or_update は string ID を返す
+        updated_project_id_str = repo.save_or_update(existing_project)
+        updated_project = repo.get_by_id(
+            updated_project_id_str
+        )  # get_by_id は string ID を受け付ける
         if updated_project is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -139,21 +147,25 @@ def update_project(
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
-    project_id: UUID,
+    project_id: str,  # UUID から str に変更
     repo: ProjectRepository = Depends(get_project_repository),
 ):
     """
     指定されたIDのプロジェクトを削除します。
     """
     try:
-        deleted = repo.delete_by_id(project_id)
+        deleted = repo.delete_by_id(
+            project_id
+        )  # delete_by_id は string ID を受け付ける
         if not deleted:
+            # delete_by_id が ValueError を raise するようになったので、
+            # ここで 404 を返す必要はなくなったかもしれないが、念のため残す
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project with ID '{project_id}' not found or could not be deleted.",
             )
-        return None
-    except ValueError as ve:
+        return None  # 204 No Content を返す
+    except ValueError as ve:  # リポジトリが ValueError を raise する場合
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(ve),
