@@ -3,7 +3,6 @@ import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
 from models import Project
-from uuid import UUID
 from datetime import datetime
 
 
@@ -13,7 +12,7 @@ class ProjectRepository(ABC):
     """
 
     @abstractmethod
-    def save_or_update(self, project: Project) -> UUID:
+    def save_or_update(self, project: Project) -> str:
         """
         プロジェクトを永続化ストレージに保存または更新します。
 
@@ -29,7 +28,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, project_id: UUID) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Project]:
         """
         指定されたIDに基づいてプロジェクトを取得します。
 
@@ -59,7 +58,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def delete_by_id(self, project_id: UUID) -> bool:
+    def delete_by_id(self, project_id: str) -> bool:
         """
         指定されたIDに基づいてプロジェクトを削除します。
 
@@ -89,7 +88,6 @@ class DynamoDbProjectRepository(ProjectRepository):
         if dynamodb_resource:
             self._dynamodb = dynamodb_resource
         else:
-            # デフォルトのDynamoDB Local設定
             self._dynamodb = boto3.resource(
                 "dynamodb",
                 endpoint_url="http://localhost:8000",
@@ -97,7 +95,6 @@ class DynamoDbProjectRepository(ProjectRepository):
                 aws_access_key_id="dummy",
                 aws_secret_access_key="dummy",
             )
-        # テーブルオブジェクトの初期化は initialize で行う
         self._table = None
 
     def initialize(self, table_name: str):
@@ -115,7 +112,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                     {
                         "AttributeName": "project_id",
                         "AttributeType": "S",
-                    },  # UUIDは文字列として保存
+                    },
                 ],
                 ProvisionedThroughput={"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
             )
@@ -134,11 +131,10 @@ class DynamoDbProjectRepository(ProjectRepository):
     def _ensure_table_initialized(self):
         """テーブルが初期化されていることを確認します。"""
         if self._table is None:
-            # 通常は initialize が呼ばれるが、念のため
             print("Table was not initialized. Initializing now.")
             self.initialize()
 
-    def save_or_update(self, project: Project) -> UUID:
+    def save_or_update(self, project: Project) -> str:
         """
         プロジェクトをDynamoDBに保存または更新します。
 
@@ -152,9 +148,8 @@ class DynamoDbProjectRepository(ProjectRepository):
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
         self._ensure_table_initialized()
-        project.updated_at = datetime.now()  # 更新日時を現在時刻に設定
+        project.updated_at = datetime.now()
         try:
-            # UUIDとdatetimeを文字列に変換して保存
             item_to_save = {
                 "project_id": str(project.project_id),
                 "title": project.title,
@@ -169,7 +164,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                 f"Failed to save/update project: {e.response['Error']['Message']}"
             ) from e
 
-    def get_by_id(self, project_id: UUID) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Project]:
         """
         指定されたIDに基づいてプロジェクトをDynamoDBから取得します。
 
@@ -184,12 +179,11 @@ class DynamoDbProjectRepository(ProjectRepository):
         """
         self._ensure_table_initialized()
         try:
-            response = self._table.get_item(Key={"project_id": str(project_id)})
+            response = self._table.get_item(Key={"project_id": project_id})
             item = response.get("Item")
             if item:
-                # 文字列からUUIDとdatetimeに変換して返す
                 return Project(
-                    project_id=UUID(item["project_id"]),
+                    project_id=item["project_id"],
                     title=item["title"],
                     created_at=datetime.fromisoformat(item["created_at"]),
                     updated_at=datetime.fromisoformat(item["updated_at"]),
@@ -201,7 +195,7 @@ class DynamoDbProjectRepository(ProjectRepository):
             raise Exception(
                 f"Failed to get project: {e.response['Error']['Message']}"
             ) from e
-        except ValueError as e:  # UUIDやdatetimeの変換エラー
+        except ValueError as e:
             print(f"Error converting data for project (ID: {project_id}): {e}")
             raise Exception(f"Data conversion error for project: {e}") from e
 
@@ -222,10 +216,9 @@ class DynamoDbProjectRepository(ProjectRepository):
             items = response.get("Items", [])
             for item in items:
                 try:
-                    # 文字列からUUIDとdatetimeに変換
                     projects.append(
                         Project(
-                            project_id=UUID(item["project_id"]),
+                            project_id=item["project_id"],
                             title=item["title"],
                             created_at=datetime.fromisoformat(item["created_at"]),
                             updated_at=datetime.fromisoformat(item["updated_at"]),
@@ -233,9 +226,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                     )
                 except ValueError as e:
                     print(f"Skipping item due to conversion error: {item}, Error: {e}")
-                    # エラーが発生した項目はスキップする
 
-            # DynamoDBのscanは1MB制限があるため、ページネーションが必要な場合がある
             while "LastEvaluatedKey" in response:
                 response = self._table.scan(
                     ExclusiveStartKey=response["LastEvaluatedKey"]
@@ -245,7 +236,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                     try:
                         projects.append(
                             Project(
-                                project_id=UUID(item["project_id"]),
+                                project_id=item["project_id"],
                                 title=item["title"],
                                 created_at=datetime.fromisoformat(item["created_at"]),
                                 updated_at=datetime.fromisoformat(item["updated_at"]),
@@ -263,7 +254,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                 f"Failed to get all projects: {e.response['Error']['Message']}"
             ) from e
 
-    def delete_by_id(self, project_id: UUID) -> bool:
+    def delete_by_id(self, project_id: str) -> bool:
         """
         指定されたIDに基づいてプロジェクトをDynamoDBから削除します。
 
@@ -280,14 +271,11 @@ class DynamoDbProjectRepository(ProjectRepository):
         self._ensure_table_initialized()
         try:
             response = self._table.delete_item(
-                Key={"project_id": str(project_id)},
-                ReturnValues="ALL_OLD",  # 削除前のアイテムを取得して存在確認
+                Key={"project_id": project_id}, ReturnValues="ALL_OLD"
             )
-            # 'Attributes' がレスポンスに含まれていれば、アイテムが存在し削除されたことを意味する
             if "Attributes" in response:
                 return True
             else:
-                # アイテムが存在しなかった場合
                 raise ValueError(f"Project with ID '{project_id}' not found.")
         except ClientError as e:
             print(f"Error deleting project (ID: {project_id}): {e}")

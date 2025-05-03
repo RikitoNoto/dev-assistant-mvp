@@ -1,6 +1,8 @@
+import random
+import string
 from datetime import datetime
 from pydantic import BaseModel
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 
 class Document(BaseModel):
@@ -34,7 +36,7 @@ class Project(BaseModel):
             data["updated_at"] = datetime.now()
         super().__init__(**data)
 
-    project_id: UUID
+    project_id: str
     title: str
     created_at: datetime
     updated_at: datetime
