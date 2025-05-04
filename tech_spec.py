@@ -16,9 +16,10 @@ class TechSpecBot(Chatbot):
     プロダクト企画を支援するチャットボットクラス。
     """
 
-    def __init__(self):
+    def __init__(self, plan: str):
         super().__init__()
         self.__last_message: Optional[str] = None
+        self.__plan = plan
 
     @property
     def _model(self):
@@ -34,7 +35,7 @@ class TechSpecBot(Chatbot):
 
     @property
     def _SYSTEM_MESSAGE_PROMPT(self) -> str:
-        return """
+        return f"""
         あなたは技術仕様ファイルの修正をサポートするアシスタントです
         ユーザーから提案された企画から技術仕様ファイルを作成したり、技術仕様ファイルをブラッシュアップして技術仕様ファイルを出力します
         選定で重要視するのは、コストと開発スピードです。
@@ -51,11 +52,21 @@ class TechSpecBot(Chatbot):
         - 会話の返答の後に企画の修正内容を返す
         - ユーザーへのメッセージの後に「===============」を出力しファイルの内容を記載
         - 「企画ファイル」のようなタイトルは不要
+        
+        ## 企画
+        {self.__plan}
         """
 
-    async def stream(self, user_message: str):
+    async def stream(self, user_message: str, **kwargs):
         response = ""
-        async for chunk in super().stream(user_message):
+        content = kwargs.get("content", "")
+        message = f"""
+        ## 現在の技術仕様ファイル
+        {content}
+        ## user message
+        {user_message}
+        """
+        async for chunk in super().stream(message):
             response += chunk
             yield chunk
         self.__last_message = response

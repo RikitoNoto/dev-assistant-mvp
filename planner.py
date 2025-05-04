@@ -51,12 +51,18 @@ class PlannerBot(Chatbot):
         - 会話の返答の後に企画の修正内容を返す
         - ユーザーへのメッセージの後に「===============」を出力しファイルの内容を記載
         - 「企画ファイル」のようなタイトルは不要
-
         """
 
-    async def stream(self, user_message: str):
+    async def stream(self, user_message: str, **kwargs):
         response = ""
-        async for chunk in super().stream(user_message):
+        content = kwargs.get("content", "")
+        message = f"""
+        ## 現在の企画ファイル
+        {content}
+        ## user message
+        {user_message}
+        """
+        async for chunk in super().stream(message):
             response += chunk
             yield chunk
         self.__last_message = response

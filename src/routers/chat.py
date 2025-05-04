@@ -4,12 +4,17 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from planner import PlannerBot
 from tech_spec import TechSpecBot
-from models import UserMessage
+from models import ChatAndEdit
+from routers.utils import (
+    get_project_repository,
+    get_plan_document_repository,
+    get_tech_spec_document_repository,
+)
 
 router = APIRouter()
 
 
-async def process_stream(bot: Chatbot, message: str):
+async def process_stream(bot: Chatbot, message: str, **kwargs):
     """
     Processes the bot stream and yields JSON chunks.
     Detects the separator '===============' to switch keys.
@@ -18,7 +23,7 @@ async def process_stream(bot: Chatbot, message: str):
     is_file_content = False
     separator = "==============="
 
-    async for chunk in bot.stream(message):
+    async for chunk in bot.stream(message, **kwargs):
         buffer += chunk
 
         while True:
@@ -65,22 +70,31 @@ async def process_stream(bot: Chatbot, message: str):
 
 
 @router.post("/plan/stream")
-async def chat_plan_stream(user_message: UserMessage):
+async def chat_plan_stream(chat_and_edit_param: ChatAndEdit):
     """
     Stream chat responses from PlannerBot in JSON format (ndjson).
     """
     bot = PlannerBot()
+    repo = get_plan_document_repository()
+    plan = repo.get_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
-        process_stream(bot, user_message.message), media_type="application/x-ndjson"
+        process_stream(bot, chat_and_edit_param.message, content=plan.content),
+        media_type="application/x-ndjson",
     )
 
 
 @router.post("/tech-spec/stream")
-async def chat_tech_spec_stream(user_message: UserMessage):
+async def chat_tech_spec_stream(chat_and_edit_param: ChatAndEdit):
     """
     Stream chat responses from TechSpecBot in JSON format (ndjson).
     """
-    bot = TechSpecBot()
+    plan_repo = get_plan_document_repository()
+    plan = plan_repo.get_by_id(chat_and_edit_param.project_id)
+
+    bot = TechSpecBot(plan=plan)
+    tech_spec_repo = get_tech_spec_document_repository()
+    tech_spec = tech_spec_repo.get_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
-        process_stream(bot, user_message.message), media_type="application/x-ndjson"
+        process_stream(bot, chat_and_edit_param.message, content=tech_spec.content),
+        media_type="application/x-ndjson",
     )
