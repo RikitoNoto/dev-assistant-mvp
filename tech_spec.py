@@ -17,9 +17,9 @@ class TechSpecBot(Chatbot):
     """
 
     def __init__(self, plan: str):
+        self.__plan = plan
         super().__init__()
         self.__last_message: Optional[str] = None
-        self.__plan = plan
 
     @property
     def _model(self):
@@ -52,7 +52,7 @@ class TechSpecBot(Chatbot):
         - 会話の返答の後に企画の修正内容を返す
         - ユーザーへのメッセージの後に「===============」を出力しファイルの内容を記載
         - 「企画ファイル」のようなタイトルは不要
-        
+
         ## 企画
         {self.__plan}
         """
