@@ -32,7 +32,7 @@ class Chatbot(ABC):
         """
         pass
 
-    async def stream(self, user_message: str):
+    async def stream(self, user_message: str, **kwargs):
         """
         ユーザーメッセージを処理し、ストリーミングで応答を生成します。
 

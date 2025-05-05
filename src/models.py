@@ -14,6 +14,14 @@ class Document(BaseModel):
     content: str
 
 
+class ChatAndEdit(BaseModel):
+    """
+    チャットと編集を行うためのデータモデル。
+    """
+    project_id: str
+    message: str
+
+
 class UserMessage(BaseModel):
     """
     ユーザーからのメッセージを表すデータモデル。
