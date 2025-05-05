@@ -32,19 +32,44 @@ class Chatbot(ABC):
         """
         pass
 
-    async def stream(self, user_message: str, **kwargs):
+    async def stream(self, user_message: str, history: list = None, **kwargs):
         """
-        ユーザーメッセージを処理し、ストリーミングで応答を生成します。
+        ユーザーメッセージと履歴を処理し、ストリーミングで応答を生成します。
 
         Args:
             user_message: ユーザーからの入力メッセージ。
+            history: 過去の対話履歴のリスト (例: [{"user": "msg"}, {"ai": "msg"}])。
 
         Returns:
             生成された応答テキスト。
         """
+        # Reset messages for each stream call to include only system prompt initially
+        current_messages = [SystemMessage(content=self._SYSTEM_MESSAGE_PROMPT)]
+
+        # Add history messages if provided
+        if history:
+            for msg in history:
+                if "user" in msg:
+                    current_messages.append(HumanMessage(content=msg["user"]))
+                elif "ai" in msg:
+                    current_messages.append(AIMessage(content=msg["ai"]))
+
+        # Add the current user message
+        current_messages.append(HumanMessage(content=user_message))
+
         response_content = ""
-        self._messages.append(HumanMessage(content=user_message))
-        for chunk in self._model.stream(self._messages):
-            response_content += chunk.text()
-            yield chunk.text()
-        self._messages.append(AIMessage(content=response_content))
+        # Use the constructed messages for the current stream
+        async for chunk in self._model.astream(current_messages, **kwargs):
+            # Assuming chunk is already a string or has a text() method/attribute
+            # Adjust based on the actual return type of _model.astream
+            chunk_text = chunk.content if hasattr(chunk, "content") else str(chunk)
+            response_content += chunk_text
+            yield chunk_text
+
+        # Append the final AI response to the current messages list for context,
+        # but note this instance's _messages is not persisted across requests here.
+        # If persistence is needed, it should be handled differently.
+        current_messages.append(AIMessage(content=response_content))
+        # Update self._messages if you need to maintain state within the instance,
+        # though typically for stateless API calls, this might not be necessary.
+        self._messages = current_messages
