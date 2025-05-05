@@ -57,16 +57,22 @@ class TechSpecBot(Chatbot):
         {self.__plan}
         """
 
-    async def stream(self, user_message: str, **kwargs):
+    async def stream(self, user_message: str, history: list = None, **kwargs):
         response = ""
         content = kwargs.get("content", "")
+        # Remove 'content' and 'history' from kwargs if they exist,
+        # to avoid passing them down again if super().stream uses **kwargs directly.
+        kwargs.pop("content", None)
+        kwargs.pop("history", None)
+
         message = f"""
         ## 現在の技術仕様ファイル
         {content}
         ## user message
         {user_message}
         """
-        async for chunk in super().stream(message):
+        # Pass the constructed message and the history to the base class stream method
+        async for chunk in super().stream(message, history=history, **kwargs):
             response += chunk
             yield chunk
         self.__last_message = response

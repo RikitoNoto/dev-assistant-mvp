@@ -14,16 +14,17 @@ from routers.utils import (
 router = APIRouter()
 
 
-async def process_stream(bot: Chatbot, message: str, **kwargs):
+async def process_stream(bot: Chatbot, message: str, history: list = None, **kwargs):
     """
     Processes the bot stream and yields JSON chunks.
     Detects the separator '===============' to switch keys.
+    Accepts an optional history list.
     """
     buffer = ""
     is_file_content = False
     separator = "==============="
 
-    async for chunk in bot.stream(message, **kwargs):
+    async for chunk in bot.stream(message, history=history, **kwargs):
         buffer += chunk
 
         while True:
@@ -78,7 +79,12 @@ async def chat_plan_stream(chat_and_edit_param: ChatAndEdit):
     repo = get_plan_document_repository()
     plan = repo.get_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
-        process_stream(bot, chat_and_edit_param.message, content=plan.content),
+        process_stream(
+            bot,
+            chat_and_edit_param.message,
+            history=chat_and_edit_param.history,
+            content=plan.content,
+        ),
         media_type="application/x-ndjson",
     )
 
@@ -95,6 +101,11 @@ async def chat_tech_spec_stream(chat_and_edit_param: ChatAndEdit):
     tech_spec_repo = get_tech_spec_document_repository()
     tech_spec = tech_spec_repo.get_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
-        process_stream(bot, chat_and_edit_param.message, content=tech_spec.content),
+        process_stream(
+            bot,
+            chat_and_edit_param.message,
+            history=chat_and_edit_param.history,
+            content=tech_spec.content,
+        ),
         media_type="application/x-ndjson",
     )
