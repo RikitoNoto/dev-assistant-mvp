@@ -8,6 +8,8 @@ from repositories.projects import (
     DynamoDbProjectRepository,
 )
 
+from repositories.issues import IssueRepository, DynamoDbIssueRepository
+
 _project_repository_instance = None
 
 
@@ -27,4 +29,9 @@ def get_plan_document_repository() -> PlanDocumentRepository:
 
 def get_tech_spec_document_repository() -> TechSpecDocumentRepository:
     repo = DynamoDbDocRepo("TechSpecDocuments")
+    return repo
+
+
+def get_issue_repository() -> IssueRepository:
+    repo = DynamoDbIssueRepository("Issues")
     return repo

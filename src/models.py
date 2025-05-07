@@ -51,3 +51,26 @@ class Project(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+
+
+class Issue(BaseModel):
+    """
+    Issueを表すデータモデル。
+    """
+
+    def __init__(self, **data):
+        if "issue_id" not in data:
+            data["issue_id"] = str(uuid4())
+        if "created_at" not in data:
+            data["created_at"] = datetime.now()
+        if "updated_at" not in data:
+            data["updated_at"] = datetime.now()
+        super().__init__(**data)
+
+    issue_id: str
+    project_id: str
+    title: str
+    description: str
+    status: str  # 例: "open", "in_progress", "closed"
+    created_at: datetime
+    updated_at: datetime

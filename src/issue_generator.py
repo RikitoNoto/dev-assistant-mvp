@@ -16,9 +16,11 @@ class IssueGenerator(Chatbot):
     イシュー生成を支援するチャットボットクラス。
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, plan: str, tech_spec: str):
         self.__last_message: Optional[str] = None
+        self.__plan = plan
+        self.__tech_spec = tech_spec
+        super().__init__()
 
     @property
     def _model(self):
@@ -34,7 +36,7 @@ class IssueGenerator(Chatbot):
 
     @property
     def _SYSTEM_MESSAGE_PROMPT(self) -> str:
-        return """
+        return f"""
         あなたは企画と技術仕様からエンジニアが実行可能な具体的なイシュータイトルを生成するアシスタントです
         ユーザーのメッセージと現在のチケットの内容をもとに、イシューの追加や削除の提案をしてください
 
@@ -48,26 +50,31 @@ class IssueGenerator(Chatbot):
 
         ## output
         - 会話の返答の後にイシューの修正内容を箇条書きで返してください
-        - ユーザーへのメッセージの後に「===============」を出力しファイルの内容を記載
+        - 箇条書きの内容全てがイシューとして出力されるので、鉤括弧などは不要です
+        - ユーザーへのメッセージの後に「===============」を出力しイシューの箇条書きを記載
         - イシュータイトル以外の内容は出力しないでください
+
+        ## 企画
+        {self.__plan}
+        ## 技術仕様
+        {self.__tech_spec}
         """
 
     async def stream(self, user_message: str, history: list = None, **kwargs):
         response = ""
-        current_issues: list[dict[str,list[str]]] = kwargs.get("current_issues", [])
+        current_issues: list[dict[str, list[str]]] = kwargs.get("current_issues", [])
         kwargs.pop("current_issues", None)
 
         issue_str = ""
         for issues in current_issues:
             for status, titles in issues.items():
-                issue_str += f"- {status}:\n\t{titles}"
-            issue_str = f"- {issue.key}"
-            # Append the string representation to the message
-            user_message += "\n" + issue_str
+                issue_str += f"- {status}:\n"
+                for title in titles:
+                    issue_str += f"\t- {title}\n"
 
         message = f"""
         ## 現在のイシュー
-        {}
+        {issue_str}
         ## user message
         {user_message}
         """
