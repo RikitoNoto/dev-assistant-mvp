@@ -62,15 +62,21 @@ class IssueGenerator(Chatbot):
 
     async def stream(self, user_message: str, history: list = None, **kwargs):
         response = ""
-        current_issues: list[dict[str, list[str]]] = kwargs.get("current_issues", [])
+        current_issues = kwargs.get("current_issues", [])
         kwargs.pop("current_issues", None)
 
+        # Group issues by status for display
+        issues_by_status = {}
+        for issue in current_issues:
+            if issue.status not in issues_by_status:
+                issues_by_status[issue.status] = []
+            issues_by_status[issue.status].append(issue.title)
+        
         issue_str = ""
-        for issues in current_issues:
-            for status, titles in issues.items():
-                issue_str += f"- {status}:\n"
-                for title in titles:
-                    issue_str += f"\t- {title}\n"
+        for status, titles in issues_by_status.items():
+            issue_str += f"- {status}:\n"
+            for title in titles:
+                issue_str += f"\t- {title}\n"
 
         message = f"""
         ## 現在のイシュー
