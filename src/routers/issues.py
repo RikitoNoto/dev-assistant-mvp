@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Path, Query
+from fastapi import APIRouter, HTTPException, Depends, status as http_status, Path, Query
 from typing import List, Optional
 from models import Issue
 from repositories.issues import IssueRepository
@@ -17,7 +17,7 @@ def _save_or_update_issue(
         return {"issue_id": issue_id, "project_id": issue.project_id, "status": "success"}
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save/update issue: {str(e)}",
         )
 
@@ -32,7 +32,7 @@ def _get_issue_by_id(
         issue = repo.get_by_id(project_id, issue_id)
         if issue is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=f"Issue with ID '{issue_id}' not found in project '{project_id}'.",
             )
         return issue
@@ -40,7 +40,7 @@ def _get_issue_by_id(
         raise http_exc
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get issue: {str(e)}",
         )
 
@@ -88,7 +88,7 @@ def get_issues_by_project(
         return issues
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get issues for project: {str(e)}",
         )
 
@@ -113,6 +113,6 @@ def delete_issue(
         raise http_exc
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete issue: {str(e)}",
         )
