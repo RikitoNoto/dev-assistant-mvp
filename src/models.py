@@ -65,6 +65,10 @@ class Issue(BaseModel):
             data["created_at"] = datetime.now()
         if "updated_at" not in data:
             data["updated_at"] = datetime.now()
+        if "description" not in data:
+            data["description"] = ""
+        if "status" not in data:
+            data["status"] = "todo"
         super().__init__(**data)
 
     issue_id: str

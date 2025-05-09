@@ -160,8 +160,15 @@ class DynamoDbIssueRepository(IssueRepository):
         指定されたIDに基づいてIssueをDynamoDBから取得します。
         """
         try:
+            # Ensure both keys are strings for DynamoDB
+            project_id_str = str(project_id)
+            issue_id_str = str(issue_id)
+            
             response = self._table.get_item(
-                Key={"project_id": project_id, "issue_id": issue_id}
+                Key={
+                    "project_id": project_id_str,
+                    "issue_id": issue_id_str
+                }
             )
             item = response.get("Item")
             if item:
@@ -169,7 +176,7 @@ class DynamoDbIssueRepository(IssueRepository):
             else:
                 return None
         except ClientError as e:
-            print(f"Error getting issue (ID: {issue_id}): {e}")
+            print(f"Error getting issue (Project ID: {project_id}, Issue ID: {issue_id}): {e}")
             raise Exception(
                 f"Failed to get issue: {e.response['Error']['Message']}"
             ) from e
