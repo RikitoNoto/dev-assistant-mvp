@@ -1,3 +1,4 @@
+import json
 import os
 from chatbot import Chatbot
 from dotenv import load_dotenv
@@ -49,10 +50,10 @@ class IssueGenerator(Chatbot):
         - 「フロントエンド：ユーザー登録画面の作成」
 
         ## output
-        - 会話の返答の後にイシューの修正内容を箇条書きで返してください
-        - 箇条書きの内容全てがイシューとして出力されるので、鉤括弧などは不要です
-        - ユーザーへのメッセージの後に「===============」を出力しイシューの箇条書きを記載
-        - イシュータイトル以外の内容は出力しないでください
+        - ユーザーへのメッセージの後に「===============」を出力しイシューの指示を記載
+        - 1行ごとに以下の指示のみを出力します
+        - + <イシュータイトル> はイシューの追加を示します
+        - - <issue_id> はイシューの削除を示します
 
         ## 企画
         {self.__plan}
@@ -65,18 +66,17 @@ class IssueGenerator(Chatbot):
         current_issues = kwargs.get("current_issues", [])
         kwargs.pop("current_issues", None)
 
-        # Group issues by status for display
-        issues_by_status = {}
+        # Format issues as JSON with title, issue_id, and status
+        formatted_issues = []
         for issue in current_issues:
-            if issue.status not in issues_by_status:
-                issues_by_status[issue.status] = []
-            issues_by_status[issue.status].append(issue.title)
+            formatted_issues.append({
+                "title": issue.title,
+                "issue_id": issue.issue_id,
+                "status": issue.status
+            })
         
-        issue_str = ""
-        for status, titles in issues_by_status.items():
-            issue_str += f"- {status}:\n"
-            for title in titles:
-                issue_str += f"\t- {title}\n"
+        # Convert the list to a JSON string
+        issue_str = json.dumps(formatted_issues, ensure_ascii=False)
 
         message = f"""
         ## 現在のイシュー
