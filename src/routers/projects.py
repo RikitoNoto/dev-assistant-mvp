@@ -3,7 +3,8 @@ from typing import List
 
 # from uuid import UUID # UUID を削除
 from pydantic import BaseModel
-from models.models import Project, Document
+from models.models import Document
+from models.project import Project
 from repositories.projects import ProjectRepository
 from repositories.documents import DocumentRepository
 from routers.utils import (

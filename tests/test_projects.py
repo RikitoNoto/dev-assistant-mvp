@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
 from api import app
-from models.models import Project, Document
+from models.models import Document
+from models.project import Project
 from repositories.projects import ProjectRepository
 from repositories.documents import DocumentRepository
 from routers.utils import (
@@ -433,7 +434,7 @@ class TestProjectAPI:
         data = response.json()
         assert data["project_id"] == str(proj.project_id)
         assert data["title"] == updated_title
-        original_updated_at = proj.updated_at
+        original_updated_at = proj.updated_at.astimezone(timezone.utc)
         new_updated_at = datetime.fromisoformat(data["updated_at"])
         assert new_updated_at > original_updated_at
         assert datetime.fromisoformat(data["created_at"]) == proj.created_at

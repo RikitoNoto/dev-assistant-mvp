@@ -2,7 +2,7 @@ from typing import Optional, List
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models.models import Project
+from models.project import Project
 from datetime import datetime
 
 
