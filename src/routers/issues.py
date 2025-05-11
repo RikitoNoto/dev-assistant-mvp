@@ -53,6 +53,8 @@ def save_or_update_issue(
     """
     Saves a new issue or updates an existing one using the IssueRepository.
     """
+    if not issue.issue_id:
+        issue.issue_id = Issue.generate_issue_id()
     return _save_or_update_issue(issue, repo)
 
 

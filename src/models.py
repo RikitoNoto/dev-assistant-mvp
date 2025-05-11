@@ -60,7 +60,7 @@ class Issue(BaseModel):
 
     def __init__(self, **data):
         if "issue_id" not in data:
-            data["issue_id"] = str(uuid4())
+            data["issue_id"] = self.generate_issue_id()
         if "created_at" not in data:
             data["created_at"] = datetime.now()
         if "updated_at" not in data:
@@ -70,6 +70,10 @@ class Issue(BaseModel):
         if "status" not in data:
             data["status"] = "todo"
         super().__init__(**data)
+        
+    @classmethod
+    def generate_issue_id(cls):
+        return  str(uuid4())
 
     issue_id: str
     project_id: str
