@@ -44,7 +44,7 @@ class Chatbot(ABC):
             生成された応答テキスト。
         """
         # Reset messages for each stream call to include only system prompt initially
-        current_messages = [SystemMessage(content=self._SYSTEM_MESSAGE_PROMPT)]
+        current_messages = []
 
         # Add history messages if provided
         if history:
@@ -53,7 +53,9 @@ class Chatbot(ABC):
                     current_messages.append(HumanMessage(content=msg["user"]))
                 elif "ai" in msg:
                     current_messages.append(AIMessage(content=msg["ai"]))
-
+        # システムメッセージのルールは忘れられないようにできるだけ最後に
+        current_messages.append(SystemMessage(content=self._SYSTEM_MESSAGE_PROMPT))
+        
         # Add the current user message
         current_messages.append(HumanMessage(content=user_message))
 
