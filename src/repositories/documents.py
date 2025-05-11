@@ -2,7 +2,7 @@ from typing import Optional
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models import Document
+from models.models import Document
 
 
 class DocumentRepository(ABC):

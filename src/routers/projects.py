@@ -3,7 +3,7 @@ from typing import List
 
 # from uuid import UUID # UUID を削除
 from pydantic import BaseModel
-from models import Project, Document
+from models.models import Project, Document
 from repositories.projects import ProjectRepository
 from repositories.documents import DocumentRepository
 from routers.utils import (
@@ -35,10 +35,10 @@ def create_project(
     新しいプロジェクトを作成します。
     """
     try:
-        new_project = Project(title=project_data.title)
+        # Project.create メソッドを使用
+        new_project = Project.create(title=project_data.title)
         # save_or_update は string ID を返すようになった
         project_id_str = repo.save_or_update(new_project)
-        # project_id_str = str(project_uuid) # 不要になった
 
         plan_doc = Document(project_id=project_id_str, content="")
         plan_doc_repo.save_or_update(plan_doc)
@@ -123,7 +123,8 @@ def update_project(
                 detail=f"Project with ID '{project_id}' not found.",
             )
 
-        existing_project.title = project_data.title
+        # Project.update メソッドを使用
+        existing_project.update(title=project_data.title)
 
         # save_or_update は string ID を返す
         updated_project_id_str = repo.save_or_update(existing_project)

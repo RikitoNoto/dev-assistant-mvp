@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
 from api import app
-from models import Project, Document
+from models.models import Project, Document
 from repositories.projects import ProjectRepository
 from repositories.documents import DocumentRepository
 from routers.utils import (

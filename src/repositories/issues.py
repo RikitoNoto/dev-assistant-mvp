@@ -2,7 +2,7 @@ from typing import Optional, List
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models import Issue  # models.py から Issue をインポート
+from models.models import Issue  # models.py から Issue をインポート
 
 
 class IssueRepository(ABC):
