@@ -1,16 +1,16 @@
 from fastapi.testclient import TestClient
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-# テスト対象のFastAPIアプリケーションをインポート
-from api import app
-from models.document import Document
-from repositories.documents import (
-    DocumentRepository,
-)  # Fakeが継承するため、またはモックのspec用
-from routers.utils import (
-    get_plan_document_repository,
-    get_tech_spec_document_repository,
-)
+
+if TYPE_CHECKING:
+    from src.api import app
+    from src.models.document import Document
+    from src.repositories.documents import DocumentRepository
+else:
+    from api import app
+    from models.document import Document
+    from repositories.documents import DocumentRepository
 
 
 # --- Fake リポジトリクラス (変更なし) ---
@@ -50,14 +50,13 @@ class TestPlanningDocumentAPI:
         """各テストメソッドの前に実行されるセットアップ"""
         self.client = TestClient(app)
         self.fake_repo = FakeDocumentRepository()
-        # このクラスのテストで使用する依存関係をオーバーライド
-        app.dependency_overrides[get_plan_document_repository] = lambda: self.fake_repo
+        # モデルに直接リポジトリを設定
+        Document.set_repository(self.fake_repo)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
-        # オーバーライドを解除
-        if get_plan_document_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_plan_document_repository]
+        # リポジトリをクリア
+        self.fake_repo.clear()
 
     def save_or_update(
         self,
@@ -117,8 +116,8 @@ class TestPlanningDocumentAPI:
         # save_or_updateが例外を発生させるリポジトリのモックを作成
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.save_or_update.side_effect = Exception("Database error for plan")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_plan_document_repository] = lambda: mock_repo
+        # モデルに直接モックリポジトリを設定
+        Document.set_repository(mock_repo)
 
         data = self.save_or_update(
             content="Content",
@@ -128,8 +127,8 @@ class TestPlanningDocumentAPI:
 
         assert "detail" in data
         assert "Database error for plan" in data["detail"]
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_plan_document_repository]
+        # テスト後に元のリポジトリに戻す
+        Document.set_repository(self.fake_repo)
 
     # --- GET Tests for Planning Document ---
 
@@ -157,14 +156,15 @@ class TestPlanningDocumentAPI:
         # get_by_idが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.get_by_id.side_effect = Exception("Database error getting plan")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_plan_document_repository] = lambda: mock_repo
+        # モデルに直接モックリポジトリを設定
+        Document.set_repository(mock_repo)
+        
         data = self.get(project_id=project_id, status_code=500)
         assert "detail" in data
         assert "Failed to get document: Database error getting plan" in data["detail"]
 
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_plan_document_repository]
+        # テスト後に元のリポジトリに戻す
+        Document.set_repository(self.fake_repo)
 
 
 class TestTechSpecDocumentAPI:
@@ -174,16 +174,13 @@ class TestTechSpecDocumentAPI:
         """各テストメソッドの前に実行されるセットアップ"""
         self.client = TestClient(app)
         self.fake_repo = FakeDocumentRepository()
-        # このクラスのテストで使用する依存関係をオーバーライド
-        app.dependency_overrides[get_tech_spec_document_repository] = (
-            lambda: self.fake_repo
-        )
+        # モデルに直接リポジトリを設定
+        Document.set_repository(self.fake_repo)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
-        # オーバーライドを解除
-        if get_tech_spec_document_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_tech_spec_document_repository]
+        # リポジトリをクリア
+        self.fake_repo.clear()
 
     def save_or_update(
         self,
@@ -242,8 +239,8 @@ class TestTechSpecDocumentAPI:
         # save_or_updateが例外を発生させるリポジトリのモックを作成
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.save_or_update.side_effect = Exception("Database error for tech-spec")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_tech_spec_document_repository] = lambda: mock_repo
+        # モデルに直接モックリポジトリを設定
+        Document.set_repository(mock_repo)
 
         data = self.save_or_update(
             content="Content",
@@ -253,8 +250,8 @@ class TestTechSpecDocumentAPI:
         assert "detail" in data
         assert "Database error for tech-spec" in data["detail"]
 
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_tech_spec_document_repository]
+        # テスト後に元のリポジトリに戻す
+        Document.set_repository(self.fake_repo)
 
     # --- GET Tests for Tech Spec Document ---
 
@@ -284,13 +281,14 @@ class TestTechSpecDocumentAPI:
         # get_by_idが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.get_by_id.side_effect = Exception("Database error getting tech-spec")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_tech_spec_document_repository] = lambda: mock_repo
+        # モデルに直接モックリポジトリを設定
+        Document.set_repository(mock_repo)
+        
         data = self.get(project_id=project_id, status_code=500)
         assert "detail" in data
         assert (
             "Failed to get document: Database error getting tech-spec" in data["detail"]
         )
 
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_tech_spec_document_repository]
+        # テスト後に元のリポジトリに戻す
+        Document.set_repository(self.fake_repo)
