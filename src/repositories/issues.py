@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
 
 if TYPE_CHECKING:
-    from models.models import Issue
+    from models.issue import Issue
 
 class IssueRepository(ABC):
     """

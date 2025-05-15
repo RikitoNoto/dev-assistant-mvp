@@ -5,7 +5,7 @@ import uuid
 
 # テスト対象のFastAPIアプリケーションをインポート
 from api import app
-from models.models import Issue
+from models.issue import Issue
 from repositories.issues import (
     IssueRepository,
 )  # Fakeが継承するため、またはモックのspec用

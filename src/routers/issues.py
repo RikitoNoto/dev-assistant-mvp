@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status as http_status, Path, Query
 from typing import List, Optional
-from models.models import Issue
+from models.issue import Issue
 from repositories.issues import IssueRepository
 from routers.utils import get_issue_repository
 
