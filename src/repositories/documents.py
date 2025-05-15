@@ -1,8 +1,12 @@
-from typing import Optional
+from __future__ import annotations
+from typing import Optional, TYPE_CHECKING
+from datetime import datetime
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models.models import Document
+
+if TYPE_CHECKING:
+    from models.document import Document
 
 
 class DocumentRepository(ABC):
@@ -171,7 +175,10 @@ class DynamoDbDocumentRepository(
             if item:
                 return Document(
                     project_id=item["project_id"],
+                    document_id=item["project_id"],
                     content=item["content"],
+                    created_at=datetime.now() if "created_at" not in item else item["created_at"],
+                    updated_at=datetime.now() if "updated_at" not in item else item["updated_at"]
                 )
             else:
                 return None

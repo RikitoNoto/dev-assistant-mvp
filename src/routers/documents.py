@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from models.models import Document
+from models.document import Document
 from repositories.documents import (
     DocumentRepository,
     PlanDocumentRepository,

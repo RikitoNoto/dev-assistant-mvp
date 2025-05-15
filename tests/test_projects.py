@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 if TYPE_CHECKING:
     from src.api import app
-    from src.models.models import Document
+    from src.models.document import Document
     from src.models.project import Project
     from src.repositories.projects import ProjectRepository
     from src.repositories.documents import DocumentRepository
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     )
 else:
     from api import app
-    from models.models import Document
+    from models.document import Document
     from models.project import Project
     from repositories.projects import ProjectRepository
     from repositories.documents import DocumentRepository

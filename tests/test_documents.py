@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 # テスト対象のFastAPIアプリケーションをインポート
 from api import app
-from models.models import Document
+from models.document import Document
 from repositories.documents import (
     DocumentRepository,
 )  # Fakeが継承するため、またはモックのspec用

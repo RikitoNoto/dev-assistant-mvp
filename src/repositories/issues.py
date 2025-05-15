@@ -1,9 +1,11 @@
-from typing import Optional, List
+from __future__ import annotations
+from typing import Optional, List, TYPE_CHECKING
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models.models import Issue  # models.py から Issue をインポート
 
+if TYPE_CHECKING:
+    from models.models import Issue
 
 class IssueRepository(ABC):
     """

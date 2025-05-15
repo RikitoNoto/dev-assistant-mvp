@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from typing import Annotated, List
 
 from pydantic import BaseModel
-from models.models import Document
+from models.document import Document
 from models.project import Project
 from repositories.documents import DocumentRepository
 from repositories.projects import ProjectRepository

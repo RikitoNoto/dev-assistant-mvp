@@ -1,16 +1,8 @@
+from __future__ import annotations
 from datetime import datetime
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from uuid import uuid4
-
-
-class Document(BaseModel):
-    """
-    企画ドキュメントを表すデータモデル。
-    """
-
-    project_id: str
-    content: str
 
 
 class ChatAndEdit(BaseModel):
