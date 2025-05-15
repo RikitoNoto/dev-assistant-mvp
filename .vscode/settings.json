@@ -10,6 +10,6 @@
   "python.autoComplete.extraPaths": [
     "./src"
   ],
-  "windsurfPyright.analysis.typeCheckingMode": "{basic|standart|basedpyright|etc}"
+  "windsurfPyright.analysis.typeCheckingMode": "standard"
 
 }
