@@ -52,29 +52,40 @@ class Project(BaseModel):
             cls._repository = get_project_repository()
         return cls._repository
     
-    def create(self) -> str:
+    def create(self) -> Self:
         """
         新しいプロジェクトを作成します。
         
-        Args:
-            title: プロジェクトのタイトル
-            
         Returns:
-            作成されたプロジェクトのインスタンス
+            Self: 作成されたプロジェクトのインスタンス
         """
-        return self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self)
+        return self
     
-    def save(self) -> str:
+    def save(self) -> Self:
         """
         プロジェクトを永続化します。
         
         Returns:
-            str: 保存されたプロジェクトのID
+            Self: 保存されたプロジェクトのインスタンス
         """
-        return self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self)
+        return self
+    
+    def update(self, **kwargs) -> Self:
+        """
+        プロジェクトを更新します。
+        
+        Returns:
+            Self: 更新されたプロジェクトのインスタンス
+        """
+        self.updated_at = datetime.now()
+        for key, value in kwargs.items():
+            setattr(self,key,value)
+        return self.save()
     
     @classmethod
-    def find_by_id(cls, project_id: str) -> Optional[Self]:
+    def find_by_id(cls, project_id: str) -> Optional["Project"]:
         """
         IDによってプロジェクトを検索します。
         
@@ -87,7 +98,7 @@ class Project(BaseModel):
         return cls.get_repository().get_by_id(project_id)
     
     @classmethod
-    def find_all(cls) -> list[Self]:
+    def find_all(cls) -> list["Project"]:
         """
         すべてのプロジェクトを取得します。
         

@@ -1,6 +1,11 @@
-from src.models.project import Project
-from src.repositories.projects import ProjectRepository
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.models.project import Project
+    from src.repositories.projects import ProjectRepository
+else:
+    from models.project import Project
+    from repositories.projects import ProjectRepository
 
 class FakeProjectRepository(ProjectRepository):
     """インメモリでプロジェクトを管理するFakeリポジトリクラス"""

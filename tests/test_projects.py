@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 import random
 import string
 
@@ -8,77 +8,32 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
-from api import app
-from models.models import Document
-from models.project import Project
-from repositories.projects import ProjectRepository
-from repositories.documents import DocumentRepository
-from routers.utils import (
-    get_project_repository,
-    get_plan_document_repository,
-    get_tech_spec_document_repository,
-)
 
+if TYPE_CHECKING:
+    from src.api import app
+    from src.models.models import Document
+    from src.models.project import Project
+    from src.repositories.projects import ProjectRepository
+    from src.repositories.documents import DocumentRepository
+    from src.routers.utils import (
+        get_project_repository,
+        get_plan_document_repository,
+        get_tech_spec_document_repository,
+    )
+else:
+    from api import app
+    from models.models import Document
+    from models.project import Project
+    from repositories.projects import ProjectRepository
+    from repositories.documents import DocumentRepository
+    from routers.utils import (
+        get_project_repository,
+        get_plan_document_repository,
+        get_tech_spec_document_repository,
+    )
 
-# --- Fake Project Repository Class ---
-class FakeProjectRepository(ProjectRepository):
-    """インメモリでプロジェクトを管理するFakeリポジトリクラス"""
+from tests.fake_project_repository import FakeProjectRepository
 
-    def __init__(self):
-        self._projects: Dict[str, Project] = {}
-
-    def _generate_id(self) -> str:
-        """テスト用のランダムな文字列IDを生成する"""
-        return "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
-
-    def save_or_update(self, project: Project) -> str:
-        """プロジェクトを保存または更新する"""
-        if not isinstance(project, Project):
-            raise TypeError("project must be an instance of Project")
-
-        project_id = getattr(project, "project_id", None)
-        now = datetime.now(timezone.utc)
-
-        if project_id and project_id in self._projects:
-            existing_project = self._projects[project_id]
-            updated_project = Project(
-                project_id=existing_project.project_id,
-                title=project.title,
-                created_at=existing_project.created_at,
-                updated_at=now,
-            )
-            self._projects[project_id] = updated_project
-            return str(project_id)
-        else:
-            new_id = project_id or self._generate_id()
-            new_project = Project(
-                project_id=str(new_id),
-                title=project.title,
-                created_at=getattr(project, "created_at", now),
-                updated_at=now,
-            )
-            self._projects[str(new_id)] = new_project
-            return str(new_id)
-
-    def get_by_id(self, project_id: str) -> Optional[Project]:
-        """IDでプロジェクトを取得する"""
-        return self._projects.get(str(project_id))
-
-    def get_all(self) -> List[Project]:
-        """すべてのプロジェクトを取得する"""
-        return list(self._projects.values())
-
-    def delete_by_id(self, project_id: str) -> bool:
-        """IDでプロジェクトを削除する"""
-        project_id_str = str(project_id)
-        if project_id_str in self._projects:
-            del self._projects[project_id_str]
-            return True
-        raise ValueError(f"Project with ID '{project_id_str}' not found.")
-
-    def clear(self):
-        """テスト用にリポジトリをクリアする"""
-        self._projects = {}
 
 
 # --- Fake Document Repository Class ---
@@ -114,11 +69,8 @@ class FakeDocumentRepository(DocumentRepository):
         if doc_id_str and doc_id_str in self._documents_by_doc_id:
             existing_doc = self._documents_by_doc_id[doc_id_str]
             updated_doc = Document(
-                document_id=existing_doc.document_id,
                 project_id=existing_doc.project_id,
                 content=document.content,
-                created_at=existing_doc.created_at,
-                updated_at=now,
             )
             self._documents_by_doc_id[doc_id_str] = updated_doc
             self._documents[project_id_str] = updated_doc
@@ -126,22 +78,26 @@ class FakeDocumentRepository(DocumentRepository):
         else:
             new_doc_id = doc_id_str or self._generate_id()
             new_document = Document(
-                document_id=str(new_doc_id),
                 project_id=project_id_str,
                 content=document.content,
-                created_at=getattr(document, "created_at", now),
-                updated_at=now,
             )
             self._documents[project_id_str] = new_document
             self._documents_by_doc_id[str(new_doc_id)] = new_document
             return str(new_doc_id)
 
-    def get_by_id(self, document_id: str) -> Optional[Document]:
-        """ドキュメントIDでドキュメントを取得する"""
-        return self._documents_by_doc_id.get(str(document_id))
+    def get_by_id(self, project_id: str) -> Optional[Document]:
+        """
+        指定されたIDに基づいてドキュメントを取得します。
 
-    def get_by_project_id(self, project_id: str) -> Optional[Document]:
-        """プロジェクトIDでドキュメントを取得する（単純化：最初に見つかったものを返す）"""
+        Args:
+            project_id: 取得するドキュメントのID。
+
+        Returns:
+            見つかった場合はDocumentオブジェクト、見つからない場合はNone。
+
+        Raises:
+            Exception: 取得処理中にエラーが発生した場合。
+        """
         return self._documents.get(str(project_id))
 
     def get_all_by_project_id(self, project_id: str) -> List[Document]:
@@ -161,7 +117,7 @@ class FakeDocumentRepository(DocumentRepository):
             # _documents 辞書からも削除
             if doc_to_delete.project_id in self._documents:
                 # 削除対象のドキュメントIDと一致するか確認
-                if self._documents[doc_to_delete.project_id].document_id == doc_id_str:
+                if self._documents[doc_to_delete.project_id].project_id == doc_id_str:
                     del self._documents[doc_to_delete.project_id]
             return True
         return False
@@ -171,31 +127,27 @@ class FakeDocumentRepository(DocumentRepository):
         self._documents = {}
         self._documents_by_doc_id = {}
 
-
 # --- Test Class for Project API ---
 class TestProjectAPI:
     """Project API (/projects) のテストクラス"""
 
     def setup_method(self):
         """各テストメソッドの前に実行されるセットアップ"""
-        self.client = TestClient(app)
         self.fake_project_repo = FakeProjectRepository()
         self.fake_plan_doc_repo = FakeDocumentRepository()
         self.fake_tech_spec_doc_repo = FakeDocumentRepository()
-        app.dependency_overrides[get_project_repository] = (
-            lambda: self.fake_project_repo
-        )
+        
+        Project.set_repository(self.fake_project_repo)
         app.dependency_overrides[get_plan_document_repository] = (
             lambda: self.fake_plan_doc_repo
         )
         app.dependency_overrides[get_tech_spec_document_repository] = (
             lambda: self.fake_tech_spec_doc_repo
         )
+        self.client = TestClient(app)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
-        if get_project_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_project_repository]
         if get_plan_document_repository in app.dependency_overrides:
             del app.dependency_overrides[get_plan_document_repository]
         if get_tech_spec_document_repository in app.dependency_overrides:
@@ -211,7 +163,9 @@ class TestProjectAPI:
         project = Project(title=title)
         saved_project_id = self.fake_project_repo.save_or_update(project)
         saved_project = self.fake_project_repo.get_by_id(saved_project_id)
-
+        if not saved_project:
+            raise Exception("Failed to create project")
+        
         if create_docs and saved_project:
             project_id_str = str(saved_project_id)
             plan_doc = Document(project_id=project_id_str, content="Plan for " + title)
@@ -253,7 +207,7 @@ class TestProjectAPI:
         data = response.json()
         project_id_from_response = str(data["project_id"])
 
-        plan_doc = self.fake_plan_doc_repo.get_by_project_id(project_id_from_response)
+        plan_doc = self.fake_plan_doc_repo.get_by_id(project_id_from_response)
         assert plan_doc is not None
         assert plan_doc.project_id == str(project_id_from_response)
         assert plan_doc.content == ""
@@ -267,7 +221,7 @@ class TestProjectAPI:
         data = response.json()
         project_id_from_response = str(data["project_id"])
 
-        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_project_id(
+        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_id(
             project_id_from_response
         )
         assert tech_spec_doc is not None
@@ -283,7 +237,7 @@ class TestProjectAPI:
         mock_plan_repo = MagicMock(spec=DocumentRepository)
         mock_tech_spec_repo = MagicMock(spec=DocumentRepository)
 
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
         app.dependency_overrides[get_plan_document_repository] = lambda: mock_plan_repo
         app.dependency_overrides[get_tech_spec_document_repository] = (
             lambda: mock_tech_spec_repo
@@ -299,7 +253,6 @@ class TestProjectAPI:
             in data["detail"]
         )
 
-        del app.dependency_overrides[get_project_repository]
         del app.dependency_overrides[get_plan_document_repository]
         del app.dependency_overrides[get_tech_spec_document_repository]
 
@@ -312,7 +265,7 @@ class TestProjectAPI:
         )
         mock_tech_spec_repo = MagicMock(spec=DocumentRepository)
 
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
         app.dependency_overrides[get_plan_document_repository] = lambda: mock_plan_repo
         app.dependency_overrides[get_tech_spec_document_repository] = (
             lambda: mock_tech_spec_repo
@@ -328,7 +281,6 @@ class TestProjectAPI:
             in data["detail"]
         )
 
-        del app.dependency_overrides[get_project_repository]
         del app.dependency_overrides[get_plan_document_repository]
         del app.dependency_overrides[get_tech_spec_document_repository]
 
@@ -364,7 +316,7 @@ class TestProjectAPI:
         """GET /projects (リポジトリ失敗時) のテスト"""
         mock_project_repo = MagicMock(spec=ProjectRepository)
         mock_project_repo.get_all.side_effect = Exception("Database error on get all")
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
 
         response = self.client.get("/projects")
 
@@ -373,7 +325,6 @@ class TestProjectAPI:
         assert "detail" in data
         assert "Failed to get projects: Database error on get all" in data["detail"]
 
-        del app.dependency_overrides[get_project_repository]
 
     # GET /projects/{project_id}
     def test_get_project_by_id_success(self):
@@ -391,7 +342,7 @@ class TestProjectAPI:
 
     def test_get_project_by_id_not_found(self):
         """GET /projects/{project_id} (存在しないID) のテスト"""
-        non_existent_id = self.fake_project_repo._generate_id()
+        non_existent_id = "non_existent_id"
         response = self.client.get(f"/projects/{non_existent_id}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -401,12 +352,12 @@ class TestProjectAPI:
 
     def test_get_project_by_id_failure(self):
         """GET /projects/{project_id} (リポジトリ失敗時) のテスト"""
-        proj_id = self.fake_project_repo._generate_id()
+        proj_id = "non_existent_id"
         mock_project_repo = MagicMock(spec=ProjectRepository)
         mock_project_repo.get_by_id.side_effect = Exception(
             "Database error on get by id"
         )
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
 
         response = self.client.get(f"/projects/{proj_id}")
 
@@ -415,13 +366,12 @@ class TestProjectAPI:
         assert "detail" in data
         assert "Failed to get project: Database error on get by id" in data["detail"]
 
-        del app.dependency_overrides[get_project_repository]
-
     # PUT /projects/{project_id}
     def test_update_project_success(self):
         """PUT /projects/{project_id} (成功時) のテスト"""
         proj = self._create_project_in_repo("Initial Title", create_docs=True)
         updated_title = "Updated Project Title"
+        original_updated_at = proj.updated_at
 
         time.sleep(0.01)
 
@@ -434,7 +384,6 @@ class TestProjectAPI:
         data = response.json()
         assert data["project_id"] == str(proj.project_id)
         assert data["title"] == updated_title
-        original_updated_at = proj.updated_at.astimezone(timezone.utc)
         new_updated_at = datetime.fromisoformat(data["updated_at"])
         assert new_updated_at > original_updated_at
         assert datetime.fromisoformat(data["created_at"]) == proj.created_at
@@ -444,17 +393,17 @@ class TestProjectAPI:
         assert saved_project.title == updated_title
         assert saved_project.updated_at == new_updated_at
 
-        plan_doc = self.fake_plan_doc_repo.get_by_project_id(proj.project_id)
+        plan_doc = self.fake_plan_doc_repo.get_by_id(proj.project_id)
         assert plan_doc is not None
         assert plan_doc.content == "Plan for Initial Title"
 
-        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_project_id(proj.project_id)
+        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_id(proj.project_id)
         assert tech_spec_doc is not None
         assert tech_spec_doc.content == "Spec for Initial Title"
 
     def test_update_project_not_found(self):
         """PUT /projects/{project_id} (存在しないID) のテスト"""
-        non_existent_id = self.fake_project_repo._generate_id()
+        non_existent_id = "non_existent_id"
         response = self.client.put(
             f"/projects/{non_existent_id}", json={"title": "Update Fail"}
         )
@@ -472,7 +421,7 @@ class TestProjectAPI:
         mock_project_repo.save_or_update.side_effect = Exception(
             "Database error on update"
         )
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
 
         response = self.client.put(
             f"/projects/{proj.project_id}",
@@ -483,8 +432,6 @@ class TestProjectAPI:
         data = response.json()
         assert "detail" in data
         assert "Failed to update project: Database error on update" in data["detail"]
-
-        del app.dependency_overrides[get_project_repository]
 
     # DELETE /projects/{project_id}
     def test_delete_project_success(self):
@@ -500,15 +447,15 @@ class TestProjectAPI:
         deleted_project = self.fake_project_repo.get_by_id(project_id)
         assert deleted_project is None
 
-        plan_doc = self.fake_plan_doc_repo.get_by_project_id(project_id)
+        plan_doc = self.fake_plan_doc_repo.get_by_id(project_id)
         assert plan_doc is not None
 
-        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_project_id(project_id)
+        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_id(project_id)
         assert tech_spec_doc is not None
 
     def test_delete_project_not_found(self):
         """DELETE /projects/{project_id} (存在しないID) のテスト"""
-        non_existent_id = self.fake_project_repo._generate_id()
+        non_existent_id = "non_existent_id"
 
         response = self.client.delete(f"/projects/{non_existent_id}")
 
@@ -521,10 +468,11 @@ class TestProjectAPI:
         """DELETE /projects/{project_id} (リポジトリ失敗時) のテスト"""
         proj = self._create_project_in_repo("Project To Fail Delete", create_docs=True)
         mock_project_repo = MagicMock(spec=ProjectRepository)
+        mock_project_repo.get_by_id.return_value = proj
         mock_project_repo.delete_by_id.side_effect = Exception(
             "Database error on delete"
         )
-        app.dependency_overrides[get_project_repository] = lambda: mock_project_repo
+        Project.set_repository(mock_project_repo)
 
         response = self.client.delete(f"/projects/{proj.project_id}")
 
@@ -532,5 +480,3 @@ class TestProjectAPI:
         data = response.json()
         assert "detail" in data
         assert "Failed to delete project: Database error on delete" in data["detail"]
-
-        del app.dependency_overrides[get_project_repository]

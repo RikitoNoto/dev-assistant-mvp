@@ -61,14 +61,14 @@ class TestProject:
             project = Project(title="新規プロジェクト")
             
             # create メソッドを呼び出し
-            project_id = project.create()
+            project.create()
             
             # 戻り値が正しいことを確認
-            assert project_id == "12345678-1234-5678-1234-567812345678"
+            assert project.project_id == "12345678-1234-5678-1234-567812345678"
             
             # リポジトリにプロジェクトが追加されたことを確認
             assert len(self.fake_repository.get_all()) == 1
-            saved_project = self.fake_repository.get_by_id(project_id)
+            saved_project = self.fake_repository.get_by_id(project.project_id)
             assert saved_project is not None
             assert saved_project.title == "新規プロジェクト"
 
