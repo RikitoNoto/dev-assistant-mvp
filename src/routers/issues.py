@@ -1,38 +1,58 @@
-from fastapi import APIRouter, HTTPException, Depends, status as http_status, Path, Query
+from fastapi import APIRouter, HTTPException, status, Path, Query
 from typing import List, Optional
+from pydantic import BaseModel
 from models.issue import Issue
-from repositories.issues import IssueRepository
-from routers.utils import get_issue_repository
 
 router = APIRouter()
 
 
-def _save_or_update_issue(
-    issue: Issue,
-    repo: IssueRepository,
-) -> dict:
-    """Helper function to save or update an issue."""
+class IssueCreate(BaseModel):
+    project_id: str
+    title: str
+    description: Optional[str] = ""
+    status: Optional[str] = "todo"
+
+
+class IssueUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def create_issue(issue_data: IssueCreate):
+    """
+    新しいIssueを作成します。
+    """
     try:
-        issue_id = repo.save_or_update(issue)
-        return {"issue_id": issue_id, "project_id": issue.project_id, "status": "success"}
+        new_issue = Issue(
+            project_id=issue_data.project_id,
+            title=issue_data.title,
+            description=issue_data.description,
+            status=issue_data.status
+        ).create()
+        
+        return new_issue
     except Exception as e:
         raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save/update issue: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create issue: {str(e)}",
         )
 
 
-def _get_issue_by_id(
-    project_id: str,
-    issue_id: str,
-    repo: IssueRepository,
-) -> Issue:
-    """Helper function to get an issue by ID."""
+@router.get("/{project_id}/{issue_id}", response_model=Issue)
+def get_issue(
+    project_id: str = Path(..., description="The ID of the project"),
+    issue_id: str = Path(..., description="The ID of the issue"),
+):
+    """
+    プロジェクトIDとIssue IDによってIssueを取得します。
+    """
     try:
-        issue = repo.get_by_id(project_id, issue_id)
+        issue = Issue.find_by_id(project_id, issue_id)
         if issue is None:
             raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Issue with ID '{issue_id}' not found in project '{project_id}'.",
             )
         return issue
@@ -40,81 +60,95 @@ def _get_issue_by_id(
         raise http_exc
     except Exception as e:
         raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get issue: {str(e)}",
         )
-
-
-@router.post("/")
-def save_or_update_issue(
-    issue: Issue,
-    repo: IssueRepository = Depends(get_issue_repository),
-):
-    """
-    Saves a new issue or updates an existing one using the IssueRepository.
-    """
-    if not issue.issue_id:
-        issue.issue_id = Issue.generate_issue_id()
-    return _save_or_update_issue(issue, repo)
-
-
-@router.get("/{project_id}/{issue_id}", response_model=Issue)
-def get_issue(
-    project_id: str = Path(..., description="The ID of the project"),
-    issue_id: str = Path(..., description="The ID of the issue"),
-    repo: IssueRepository = Depends(get_issue_repository),
-):
-    """
-    Retrieves an issue by its project ID and issue ID.
-    """
-    return _get_issue_by_id(project_id, issue_id, repo)
 
 
 @router.get("/{project_id}", response_model=List[Issue])
 def get_issues_by_project(
     project_id: str = Path(..., description="The ID of the project"),
-    status: Optional[str] = Query(None, description="Filter issues by status"),
-    repo: IssueRepository = Depends(get_issue_repository),
+    status_filter: Optional[str] = Query(None, description="Filter issues by status", alias="status"),
 ):
     """
-    Retrieves all issues for a specific project.
-    Optionally filter by status if provided.
+    プロジェクトに関連する全てのIssueを取得します。
+    オプションでステータスによるフィルタリングが可能です。
     """
     try:
-        issues = repo.get_by_project_id(project_id)
+        issues = Issue.find_by_project_id(project_id)
         
         # Filter by status if provided
-        if status:
-            issues = [issue for issue in issues if issue.status == status]
+        if status_filter:
+            issues = [issue for issue in issues if issue.status == status_filter]
             
         return issues
     except Exception as e:
         raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get issues for project: {str(e)}",
         )
 
 
-@router.delete("/{project_id}/{issue_id}")
-def delete_issue(
+@router.put("/{project_id}/{issue_id}", response_model=Issue)
+def update_issue(
+    issue_data: IssueUpdate,
     project_id: str = Path(..., description="The ID of the project"),
     issue_id: str = Path(..., description="The ID of the issue"),
-    repo: IssueRepository = Depends(get_issue_repository),
 ):
     """
-    Deletes an issue by its project ID and issue ID.
+    指定されたIssueを更新します。
     """
     try:
-        # First check if the issue exists
-        _get_issue_by_id(project_id, issue_id, repo)
+        existing_issue = Issue.find_by_id(project_id, issue_id)
+        if existing_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue with ID '{issue_id}' not found in project '{project_id}'.",
+            )
         
-        # If no exception was raised, proceed with deletion
-        repo.delete(project_id, issue_id)
-        return {"status": "success", "message": f"Issue {issue_id} deleted successfully"}
+        # 更新するフィールドを準備
+        update_data = {}
+        if issue_data.title is not None:
+            update_data["title"] = issue_data.title
+        if issue_data.description is not None:
+            update_data["description"] = issue_data.description
+        if issue_data.status is not None:
+            update_data["status"] = issue_data.status
+        
+        # Issue.update メソッドを使用して更新
+        updated_issue = existing_issue.update(**update_data)
+        
+        return updated_issue
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update issue: {str(e)}",
+        )
+
+
+@router.delete("/{project_id}/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_issue(
+    project_id: str = Path(..., description="The ID of the project"),
+    issue_id: str = Path(..., description="The ID of the issue"),
+):
+    """
+    指定されたIssueを削除します。
+    """
+    # Issueの存在チェック
+    issue = Issue.find_by_id(project_id, issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue with ID '{issue_id}' not found in project '{project_id}'.",
+        )
+    
+    try:
+        issue.delete()
+        return None  # 204 No Content を返す
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete issue: {str(e)}",
         )

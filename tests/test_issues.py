@@ -1,15 +1,23 @@
+import time
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 from datetime import datetime
-import uuid
+from typing import Dict, List, Optional, TYPE_CHECKING
+import random
+import string
+from fastapi import status
 
 # テスト対象のFastAPIアプリケーションをインポート
-from api import app
-from models.issue import Issue
-from repositories.issues import (
-    IssueRepository,
-)  # Fakeが継承するため、またはモックのspec用
-from routers.utils import get_issue_repository
+if TYPE_CHECKING:
+    from src.api import app
+    from src.models.issue import Issue
+    from src.repositories.issues import IssueRepository
+    from src.routers.utils import get_issue_repository
+else:
+    from api import app
+    from models.issue import Issue
+    from repositories.issues import IssueRepository
+    from routers.utils import get_issue_repository
 
 
 # --- Fake リポジトリクラス ---
@@ -18,6 +26,10 @@ class FakeIssueRepository(IssueRepository):
 
     def __init__(self):
         self._issues = {}  # {project_id: {issue_id: Issue}}
+
+    def _generate_id(self) -> str:
+        """テスト用のランダムな文字列IDを生成する"""
+        return "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
 
     def initialize(self, *args, **kwargs):
         return super().initialize(*args, **kwargs)
@@ -36,12 +48,12 @@ class FakeIssueRepository(IssueRepository):
         self._issues[issue.project_id][issue.issue_id] = issue
         return issue.issue_id
 
-    def get_by_id(self, project_id: str, issue_id: str) -> Issue | None:
+    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Issue]:
         if project_id not in self._issues:
             return None
         return self._issues[project_id].get(issue_id)
 
-    def get_by_project_id(self, project_id: str) -> list[Issue]:
+    def get_by_project_id(self, project_id: str) -> List[Issue]:
         if project_id not in self._issues:
             return []
         return list(self._issues[project_id].values())
@@ -62,25 +74,27 @@ class TestIssueAPI:
         """各テストメソッドの前に実行されるセットアップ"""
         self.client = TestClient(app)
         self.fake_repo = FakeIssueRepository()
-        # このクラスのテストで使用する依存関係をオーバーライド
-        app.dependency_overrides[get_issue_repository] = lambda: self.fake_repo
+        # Issueモデルにリポジトリを設定
+        Issue.set_repository(self.fake_repo)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
-        # オーバーライドを解除
-        if get_issue_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_issue_repository]
         self.fake_repo.clear()
 
-    def create_issue(
-        self,
-        title: str,
-        project_id: str,
-        description: str = "",
-        status: str = "todo",
-        status_code: int = 200,
-    ) -> dict:
-        """APIを呼び出すヘルパーメソッド - Issue作成"""
+    # --- Helper Methods ---
+    def _create_issue_in_repo(self, title: str, project_id: str, description: str = "", status: str = "todo") -> Issue:
+        """テスト用にリポジトリに直接Issueを作成するヘルパー"""
+        issue = Issue(
+            project_id=project_id,
+            title=title,
+            description=description,
+            status=status
+        )
+        issue.create()
+        return issue
+
+    def _create_issue_via_api(self, title: str, project_id: str, description: str = "", status: str = "todo", expected_status: int = status.HTTP_201_CREATED) -> dict:
+        """APIを呼び出してIssueを作成するヘルパーメソッド"""
         issue_data = {
             "project_id": project_id,
             "title": title,
@@ -88,123 +102,138 @@ class TestIssueAPI:
             "status": status,
         }
         response = self.client.post("/issues/", json=issue_data)
-        assert response.status_code == status_code
+        assert response.status_code == expected_status
         return response.json()
 
-    def get_issue(self, project_id: str, issue_id: str, status_code: int = 200) -> dict:
-        """APIを呼び出すヘルパーメソッド - Issue取得"""
+    def _get_issue(self, project_id: str, issue_id: str, expected_status: int = status.HTTP_200_OK) -> dict:
+        """APIを呼び出してIssueを取得するヘルパーメソッド"""
         response = self.client.get(f"/issues/{project_id}/{issue_id}")
-        assert response.status_code == status_code
+        assert response.status_code == expected_status
         return response.json()
 
-    def get_issues_by_project(
-        self, project_id: str, status: str = None, status_code: int = 200
-    ) -> list:
-        """APIを呼び出すヘルパーメソッド - プロジェクト別Issue一覧取得"""
+    def _get_issues_by_project(self, project_id: str, status_filter: Optional[str] = None, expected_status: int = status.HTTP_200_OK) -> list:
+        """APIを呼び出してプロジェクトの全Issueを取得するヘルパーメソッド"""
         url = f"/issues/{project_id}"
-        if status:
-            url += f"?status={status}"
+        if status_filter:
+            url += f"?status={status_filter}"
         response = self.client.get(url)
-        assert response.status_code == status_code
+        assert response.status_code == expected_status
         return response.json()
 
-    def delete_issue(
-        self, project_id: str, issue_id: str, status_code: int = 200
-    ) -> dict:
-        """APIを呼び出すヘルパーメソッド - Issue削除"""
-        response = self.client.delete(f"/issues/{project_id}/{issue_id}")
-        assert response.status_code == status_code
+    def _update_issue(self, project_id: str, issue_id: str, update_data: dict, expected_status: int = status.HTTP_200_OK) -> dict:
+        """APIを呼び出してIssueを更新するヘルパーメソッド"""
+        response = self.client.put(f"/issues/{project_id}/{issue_id}", json=update_data)
+        assert response.status_code == expected_status
         return response.json()
+
+    def _delete_issue(self, project_id: str, issue_id: str, expected_status: int = status.HTTP_204_NO_CONTENT) -> Optional[dict]:
+        """APIを呼び出してIssueを削除するヘルパーメソッド"""
+        response = self.client.delete(f"/issues/{project_id}/{issue_id}")
+        assert response.status_code == expected_status
+        if response.content:
+            return response.json()
+        return None
 
     # --- POST Tests ---
-    def test_save_or_update_issue_create(self):
-        """POST /issues/ (新規作成時) のテスト"""
+    def test_create_issue_success(self):
+        """POST /issues/ (新規作成成功時) のテスト"""
         project_id = "test-project-1"
         title = "Test Issue"
         description = "This is a test issue"
         status = "todo"
 
-        data = self.create_issue(
+        data = self._create_issue_via_api(
             title=title, project_id=project_id, description=description, status=status
         )
 
         assert "issue_id" in data
         assert data["project_id"] == project_id
-        assert data["status"] == "success"
+        assert data["title"] == title
+        assert data["description"] == description
+        assert data["status"] == status
+        assert "created_at" in data
+        assert "updated_at" in data
 
-        # Fakeリポジトリから取得して検証
+        # リポジトリから取得して検証
         issue_id = data["issue_id"]
-        saved_issue = self.fake_repo.get_by_id(project_id, issue_id)
+        saved_issue = Issue.find_by_id(project_id, issue_id)
         assert saved_issue is not None
         assert saved_issue.project_id == project_id
         assert saved_issue.title == title
         assert saved_issue.description == description
         assert saved_issue.status == status
 
-    def test_save_or_update_issue_update(self):
-        """POST /issues/ (更新時) のテスト"""
+    def test_update_issue_success(self):
+        """PUT /issues/{project_id}/{issue_id} (更新成功時) のテスト"""
         # 事前にIssueを作成
         project_id = "test-project-2"
         initial_title = "Initial Issue"
         initial_description = "Initial description"
         initial_status = "todo"
 
-        # 新規作成
-        initial_data = self.create_issue(
+        # リポジトリに直接作成
+        issue = self._create_issue_in_repo(
             title=initial_title,
             project_id=project_id,
             description=initial_description,
             status=initial_status,
         )
-        issue_id = initial_data["issue_id"]
+        issue_id = issue.issue_id
+        original_updated_at = issue.updated_at
+
+        time.sleep(0.01)  # 確実に更新日時が変わるように少し待つ
 
         # 更新データ
         updated_title = "Updated Issue"
         updated_description = "Updated description"
         updated_status = "in_progress"
 
-        # 更新用のIssueオブジェクトを作成
-        update_issue_data = {
-            "issue_id": issue_id,
-            "project_id": project_id,
+        # PUTリクエストで更新
+        update_data = {
             "title": updated_title,
             "description": updated_description,
             "status": updated_status,
         }
-        response = self.client.post("/issues/", json=update_issue_data)
-        assert response.status_code == 200
-        data = response.json()
+        updated_data = self._update_issue(project_id, issue_id, update_data)
 
-        assert data["issue_id"] == issue_id
-        assert data["project_id"] == project_id
-        assert data["status"] == "success"
+        assert updated_data["issue_id"] == issue_id
+        assert updated_data["project_id"] == project_id
+        assert updated_data["title"] == updated_title
+        assert updated_data["description"] == updated_description
+        assert updated_data["status"] == updated_status
+        new_updated_at = datetime.fromisoformat(updated_data["updated_at"])
+        assert new_updated_at > original_updated_at
 
         # 更新されたIssueを取得して検証
-        updated_issue = self.fake_repo.get_by_id(project_id, issue_id)
+        updated_issue = Issue.find_by_id(project_id, issue_id)
         assert updated_issue is not None
         assert updated_issue.project_id == project_id
         assert updated_issue.title == updated_title
         assert updated_issue.description == updated_description
         assert updated_issue.status == updated_status
 
-    def test_save_or_update_issue_failure(self):
+    def test_create_issue_failure(self):
         """POST /issues/ (リポジトリ失敗時) のテスト"""
         # save_or_updateが例外を発生させるリポジトリのモックを作成
         mock_repo = MagicMock(spec=IssueRepository)
         mock_repo.save_or_update.side_effect = Exception("Database error for issue")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_issue_repository] = lambda: mock_repo
+        # Issueモデルにモックリポジトリを設定
+        Issue.set_repository(mock_repo)
 
-        data = self.create_issue(
-            title="Failing Issue",
-            project_id="test-project-fail",
-            status_code=500,
-        )
+        response = self.client.post("/issues/", json={
+            "project_id": "test-project-fail",
+            "title": "Failing Issue",
+            "description": "",
+            "status": "todo"
+        })
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
 
         assert "detail" in data
-        assert "Failed to save/update issue: Database error for issue" in data["detail"]
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_issue_repository]
+        assert "Failed to create issue: Database error for issue" in data["detail"]
+        
+        # 元のリポジトリに戻す
+        Issue.set_repository(self.fake_repo)
 
     # --- GET Tests for Single Issue ---
     def test_get_issue_success(self):
@@ -215,27 +244,30 @@ class TestIssueAPI:
         description = "This is a test issue for get"
         status = "todo"
 
-        data = self.create_issue(
+        # リポジトリに直接作成
+        issue = self._create_issue_in_repo(
             title=title, project_id=project_id, description=description, status=status
         )
-        issue_id = data["issue_id"]
+        issue_id = issue.issue_id
 
         # Issueを取得
-        issue_data = self.get_issue(project_id=project_id, issue_id=issue_id)
+        issue_data = self._get_issue(project_id=project_id, issue_id=issue_id)
 
         assert issue_data["issue_id"] == issue_id
         assert issue_data["project_id"] == project_id
         assert issue_data["title"] == title
         assert issue_data["description"] == description
         assert issue_data["status"] == status
+        assert "created_at" in issue_data
+        assert "updated_at" in issue_data
 
     def test_get_issue_not_found(self):
         """GET /issues/{project_id}/{issue_id} (存在しないID) のテスト"""
         project_id = "test-project-not-exist"
         issue_id = "non-existent-issue"
-        data = self.get_issue(
-            project_id=project_id, issue_id=issue_id, status_code=404
-        )
+        response = self.client.get(f"/issues/{project_id}/{issue_id}")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
 
         assert "detail" in data
         assert f"Issue with ID '{issue_id}' not found in project '{project_id}'" in data["detail"]
@@ -244,21 +276,21 @@ class TestIssueAPI:
         """GET /issues/{project_id}/{issue_id} (リポジトリ失敗時) のテスト"""
         project_id = "test-project-get-fail"
         issue_id = "test-issue-get-fail"
-        # get_by_idが例外を発生させるモックを作成
+        # find_by_idが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=IssueRepository)
         mock_repo.get_by_id.side_effect = Exception("Database error getting issue")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_issue_repository] = lambda: mock_repo
+        # Issueモデルにモックリポジトリを設定
+        Issue.set_repository(mock_repo)
         
-        data = self.get_issue(
-            project_id=project_id, issue_id=issue_id, status_code=500
-        )
+        response = self.client.get(f"/issues/{project_id}/{issue_id}")
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
         
         assert "detail" in data
         assert "Failed to get issue: Database error getting issue" in data["detail"]
 
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_issue_repository]
+        # 元のリポジトリに戻す
+        Issue.set_repository(self.fake_repo)
 
     # --- GET Tests for Project Issues ---
     def test_get_issues_by_project_success(self):
@@ -266,50 +298,50 @@ class TestIssueAPI:
         project_id = "test-project-4"
         
         # 複数のIssueを作成
-        issue1_data = self.create_issue(
+        issue1 = self._create_issue_in_repo(
             title="Issue 1", project_id=project_id, status="todo"
         )
-        issue2_data = self.create_issue(
+        issue2 = self._create_issue_in_repo(
             title="Issue 2", project_id=project_id, status="in_progress"
         )
-        issue3_data = self.create_issue(
+        issue3 = self._create_issue_in_repo(
             title="Issue 3", project_id=project_id, status="todo"
         )
         
         # プロジェクトの全Issueを取得
-        issues = self.get_issues_by_project(project_id=project_id)
+        issues = self._get_issues_by_project(project_id=project_id)
         
         assert len(issues) == 3
         issue_ids = [issue["issue_id"] for issue in issues]
-        assert issue1_data["issue_id"] in issue_ids
-        assert issue2_data["issue_id"] in issue_ids
-        assert issue3_data["issue_id"] in issue_ids
+        assert issue1.issue_id in issue_ids
+        assert issue2.issue_id in issue_ids
+        assert issue3.issue_id in issue_ids
 
     def test_get_issues_by_project_with_status_filter(self):
         """GET /issues/{project_id}?status={status} (ステータスフィルタ付き) のテスト"""
         project_id = "test-project-5"
         
         # 異なるステータスのIssueを作成
-        self.create_issue(title="Todo Issue 1", project_id=project_id, status="todo")
-        self.create_issue(title="Todo Issue 2", project_id=project_id, status="todo")
-        self.create_issue(title="In Progress Issue", project_id=project_id, status="in_progress")
-        self.create_issue(title="Done Issue", project_id=project_id, status="done")
+        self._create_issue_in_repo(title="Todo Issue 1", project_id=project_id, status="todo")
+        self._create_issue_in_repo(title="Todo Issue 2", project_id=project_id, status="todo")
+        self._create_issue_in_repo(title="In Progress Issue", project_id=project_id, status="in_progress")
+        self._create_issue_in_repo(title="Done Issue", project_id=project_id, status="done")
         
         # todoステータスのIssueのみを取得
-        todo_issues = self.get_issues_by_project(project_id=project_id, status="todo")
+        todo_issues = self._get_issues_by_project(project_id=project_id, status_filter="todo")
         assert len(todo_issues) == 2
         for issue in todo_issues:
             assert issue["status"] == "todo"
         
         # in_progressステータスのIssueのみを取得
-        in_progress_issues = self.get_issues_by_project(project_id=project_id, status="in_progress")
+        in_progress_issues = self._get_issues_by_project(project_id=project_id, status_filter="in_progress")
         assert len(in_progress_issues) == 1
         assert in_progress_issues[0]["status"] == "in_progress"
 
     def test_get_issues_by_project_empty(self):
         """GET /issues/{project_id} (Issueが存在しない場合) のテスト"""
         project_id = "test-project-empty"
-        issues = self.get_issues_by_project(project_id=project_id)
+        issues = self._get_issues_by_project(project_id=project_id)
         assert len(issues) == 0
 
     def test_get_issues_by_project_failure(self):
@@ -318,19 +350,18 @@ class TestIssueAPI:
         # get_by_project_idが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=IssueRepository)
         mock_repo.get_by_project_id.side_effect = Exception("Database error listing issues")
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_issue_repository] = lambda: mock_repo
+        # Issueモデルにモックリポジトリを設定
+        Issue.set_repository(mock_repo)
         
-        # status引数を指定せず、status_codeのみを指定
         response = self.client.get(f"/issues/{project_id}")
-        assert response.status_code == 500
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         data = response.json()
         
         assert "detail" in data
         assert "Failed to get issues for project: Database error listing issues" in data["detail"]
 
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_issue_repository]
+        # 元のリポジトリに戻す
+        Issue.set_repository(self.fake_repo)
 
     # --- DELETE Tests ---
     def test_delete_issue_success(self):
@@ -339,22 +370,18 @@ class TestIssueAPI:
         project_id = "test-project-6"
         title = "Test Issue for Delete"
         
-        data = self.create_issue(title=title, project_id=project_id)
-        issue_id = data["issue_id"]
+        issue = self._create_issue_in_repo(title=title, project_id=project_id)
+        issue_id = issue.issue_id
         
         # Issueが存在することを確認
-        issue = self.fake_repo.get_by_id(project_id, issue_id)
-        assert issue is not None
+        existing_issue = Issue.find_by_id(project_id, issue_id)
+        assert existing_issue is not None
         
         # Issueを削除
-        delete_data = self.delete_issue(project_id=project_id, issue_id=issue_id)
-        
-        assert delete_data["status"] == "success"
-        assert "Issue" in delete_data["message"]
-        assert "deleted successfully" in delete_data["message"]
+        self._delete_issue(project_id=project_id, issue_id=issue_id)
         
         # Issueが削除されたことを確認
-        deleted_issue = self.fake_repo.get_by_id(project_id, issue_id)
+        deleted_issue = Issue.find_by_id(project_id, issue_id)
         assert deleted_issue is None
 
     def test_delete_issue_not_found(self):
@@ -362,9 +389,9 @@ class TestIssueAPI:
         project_id = "test-project-not-exist-delete"
         issue_id = "non-existent-issue-delete"
         
-        data = self.delete_issue(
-            project_id=project_id, issue_id=issue_id, status_code=404
-        )
+        response = self.client.delete(f"/issues/{project_id}/{issue_id}")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
         
         assert "detail" in data
         assert f"Issue with ID '{issue_id}' not found in project '{project_id}'" in data["detail"]
@@ -375,8 +402,8 @@ class TestIssueAPI:
         project_id = "test-project-7"
         title = "Test Issue for Delete Failure"
         
-        data = self.create_issue(title=title, project_id=project_id)
-        issue_id = data["issue_id"]
+        issue = self._create_issue_in_repo(title=title, project_id=project_id)
+        issue_id = issue.issue_id
         
         # deleteが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=IssueRepository)
@@ -388,15 +415,15 @@ class TestIssueAPI:
         )
         mock_repo.delete.side_effect = Exception("Database error deleting issue")
         
-        # このテスト専用のオーバーライドを設定
-        app.dependency_overrides[get_issue_repository] = lambda: mock_repo
+        # Issueモデルにモックリポジトリを設定
+        Issue.set_repository(mock_repo)
         
-        data = self.delete_issue(
-            project_id=project_id, issue_id=issue_id, status_code=500
-        )
+        response = self.client.delete(f"/issues/{project_id}/{issue_id}")
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
         
         assert "detail" in data
         assert "Failed to delete issue: Database error deleting issue" in data["detail"]
         
-        # このテストで使用したオーバーライドを明示的に解除
-        del app.dependency_overrides[get_issue_repository]
+        # 元のリポジトリに戻す
+        Issue.set_repository(self.fake_repo)
