@@ -1,9 +1,12 @@
-from typing import Optional, List
+from __future__ import annotations
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-from models import Project
 from datetime import datetime
+from typing import Optional, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.project import Project
 
 
 class ProjectRepository(ABC):

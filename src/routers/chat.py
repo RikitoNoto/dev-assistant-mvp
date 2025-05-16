@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from planner import PlannerBot
 from tech_spec import TechSpecBot
 from issue_generator import IssueGenerator
-from models import ChatAndEdit
+from models.models import ChatAndEdit
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,
