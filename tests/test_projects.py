@@ -480,3 +480,56 @@ class TestProjectAPI:
         data = response.json()
         assert "detail" in data
         assert "Failed to delete project: Database error on delete" in data["detail"]
+        
+    # POST /projects/{project_id}/open
+    def test_update_project_last_opened_at_success(self):
+        """POST /projects/{project_id}/open (成功時) のテスト"""
+        proj = self._create_project_in_repo("Project To Open", create_docs=True)
+        original_last_opened_at = proj.last_opened_at
+        
+        # 時間差を確実に作るために少し待機
+        time.sleep(0.01)
+        
+        response = self.client.post(f"/projects/{proj.project_id}/open", json={})
+        
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["project_id"] == str(proj.project_id)
+        assert data["title"] == proj.title
+        
+        # last_opened_at が更新されていることを確認
+        new_last_opened_at = datetime.fromisoformat(data["last_opened_at"])
+        assert new_last_opened_at > original_last_opened_at
+        
+        # リポジトリ内のプロジェクトも更新されていることを確認
+        updated_project = self.fake_project_repo.get_by_id(proj.project_id)
+        assert updated_project is not None
+        assert updated_project.last_opened_at == new_last_opened_at
+        
+    def test_update_project_last_opened_at_not_found(self):
+        """POST /projects/{project_id}/open (存在しないID) のテスト"""
+        non_existent_id = "non_existent_id"
+        
+        response = self.client.post(f"/projects/{non_existent_id}/open", json={})
+        
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
+        assert "detail" in data
+        assert f"Project with ID '{non_existent_id}' not found" in data["detail"]
+        
+    def test_update_project_last_opened_at_failure(self):
+        """POST /projects/{project_id}/open (リポジトリ失敗時) のテスト"""
+        proj = self._create_project_in_repo("Project To Fail Open", create_docs=True)
+        mock_project_repo = MagicMock(spec=ProjectRepository)
+        mock_project_repo.get_by_id.return_value = proj
+        mock_project_repo.save_or_update.side_effect = Exception(
+            "Database error on update last_opened_at"
+        )
+        Project.set_repository(mock_project_repo)
+        
+        response = self.client.post(f"/projects/{proj.project_id}/open", json={})
+        
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "detail" in data
+        assert "Failed to update project last_opened_at: Database error on update last_opened_at" in data["detail"]

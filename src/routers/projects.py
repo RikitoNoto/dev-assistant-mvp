@@ -25,6 +25,10 @@ class ProjectUpdate(BaseModel):
     title: str
 
 
+class ProjectOpenUpdate(BaseModel):
+    pass  # No fields needed, just updating last_opened_at
+
+
 @router.post("", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_data: ProjectCreate,
@@ -126,6 +130,35 @@ def update_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update project: {str(e)}",
+        )
+
+
+@router.post("/{project_id}/open", response_model=Project)
+def update_project_last_opened_at(
+    project_id: str,
+    _: ProjectOpenUpdate = ProjectOpenUpdate(),
+):
+    """
+    プロジェクトを開いたときに last_opened_at を更新します。
+    """
+    try:
+        existing_project = Project.find_by_id(project_id)
+        if existing_project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found.",
+            )
+
+        # last_opened_at を現在時刻に更新
+        updated_project = existing_project.update(last_opened_at=datetime.now())
+
+        return updated_project
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update project last_opened_at: {str(e)}",
         )
 
 

@@ -23,12 +23,15 @@ class Project(BaseModel):
             data["created_at"] = datetime.now()
         if "updated_at" not in data:
             data["updated_at"] = datetime.now()
+        if "last_opened_at" not in data:
+            data["last_opened_at"] = datetime.now()
         super().__init__(**data)
 
     project_id: str
     title: str
     created_at: datetime
     updated_at: datetime
+    last_opened_at: datetime
     
     @classmethod
     def set_repository(cls, repository: ProjectRepository) -> None:
