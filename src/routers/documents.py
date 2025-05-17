@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from models.document import Document
+from models.document import Document, PlanDocument, TechSpecDocument
 from repositories.documents import (
     PlanDocumentRepository,
     TechSpecDocumentRepository,
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/plan")
-def save_or_update_planning_document(document: Document):
+def save_or_update_planning_document(document: PlanDocument):
     """
     Saves a new planning document or updates an existing one.
     """
@@ -35,7 +35,7 @@ def get_planning_document(project_id: str):
     """
     try:
         # ドキュメントを検索
-        document = Document.find_by_id(project_id)
+        document = PlanDocument.find_by_id(project_id)
         if document is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -52,7 +52,7 @@ def get_planning_document(project_id: str):
 
 
 @router.post("/tech-spec")
-def save_or_update_tech_spec_document(document: Document):
+def save_or_update_tech_spec_document(document: TechSpecDocument):
     """
     Saves a new technical specification document or updates an existing one.
     """
@@ -74,7 +74,7 @@ def get_tech_spec_document(project_id: str):
     """
     try:
         # ドキュメントを検索
-        document = Document.find_by_id(project_id)
+        document = TechSpecDocument.find_by_id(project_id)
         if document is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

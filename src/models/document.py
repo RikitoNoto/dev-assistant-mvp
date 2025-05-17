@@ -3,7 +3,10 @@ from datetime import datetime
 from typing import Optional, ClassVar, Self, Dict, Any
 from pydantic import BaseModel
 from repositories.documents import DocumentRepository
-from routers.utils import get_plan_document_repository
+from routers.utils import (
+    get_plan_document_repository,
+    get_tech_spec_document_repository,
+)
 
 
 class Document(BaseModel):
@@ -139,3 +142,62 @@ class Document(BaseModel):
         """
         data = cls.get_repository().get_by_id(project_id)
         return cls.from_dict(data) if data else None
+
+class PlanDocument(Document):
+    """
+    企画ドキュメントを表すデータモデル。
+    リポジトリを利用して永続化機能を持ちます。
+    """
+    # クラス変数としてリポジトリを保持（依存性注入用）
+    _repository: ClassVar[Optional[DocumentRepository]] = None
+    
+    def __init__(self, **data):
+        if "document_id" not in data and "project_id" in data:
+            data["document_id"] = data["project_id"]
+        if "created_at" not in data:
+            data["created_at"] = datetime.now()
+        if "updated_at" not in data:
+            data["updated_at"] = datetime.now()
+        super().__init__(**data)
+    
+    @classmethod
+    def get_repository(cls) -> DocumentRepository:
+        """
+        現在のリポジトリを取得します。設定されていない場合はデフォルトのリポジトリを使用します。
+        
+        Returns:
+            DocumentRepository: 使用するリポジトリ
+        """
+        if cls._repository is None:
+            cls._repository = get_plan_document_repository()
+        return cls._repository
+    
+class TechSpecDocument(Document):
+    """
+    技術仕様ドキュメントを表すデータモデル。
+    リポジトリを利用して永続化機能を持ちます。
+    """
+    # クラス変数としてリポジトリを保持（依存性注入用）
+    _repository: ClassVar[Optional[DocumentRepository]] = None
+    
+    def __init__(self, **data):
+        if "document_id" not in data and "project_id" in data:
+            data["document_id"] = data["project_id"]
+        if "created_at" not in data:
+            data["created_at"] = datetime.now()
+        if "updated_at" not in data:
+            data["updated_at"] = datetime.now()
+        super().__init__(**data)
+    
+    @classmethod
+    def get_repository(cls) -> DocumentRepository:
+        """
+        現在のリポジトリを取得します。設定されていない場合はデフォルトのリポジトリを使用します。
+        
+        Returns:
+            DocumentRepository: 使用するリポジトリ
+        """
+        if cls._repository is None:
+            cls._repository = get_tech_spec_document_repository()
+        return cls._repository
+    

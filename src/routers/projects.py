@@ -1,17 +1,10 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, status
-from typing import Annotated, List
+from fastapi import APIRouter, HTTPException, status
+from typing import List
 
 from pydantic import BaseModel
-from models.document import Document
+from models.document import PlanDocument, TechSpecDocument
 from models.project import Project
-from repositories.documents import DocumentRepository
-from repositories.projects import ProjectRepository
-from routers.utils import (
-    get_project_repository,
-    get_plan_document_repository,
-    get_tech_spec_document_repository,
-)
 
 
 router = APIRouter()
@@ -32,8 +25,6 @@ class ProjectOpenUpdate(BaseModel):
 @router.post("", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_data: ProjectCreate,
-    plan_doc_repo:DocumentRepository= Depends(get_plan_document_repository),
-    tech_spec_doc_repo:DocumentRepository= Depends(get_tech_spec_document_repository),
 ):
     """
     新しいプロジェクトを作成します。
@@ -41,11 +32,12 @@ def create_project(
     try:
         new_project = Project(title=project_data.title).create()
 
-        plan_doc = Document(project_id=new_project.project_id, content="")
-        plan_doc_repo.save_or_update(plan_doc)
+        plan_doc = PlanDocument(project_id=new_project.project_id, content="")
+        plan_doc.create()
+        
 
-        tech_spec_doc = Document(project_id=new_project.project_id, content="")
-        tech_spec_doc_repo.save_or_update(tech_spec_doc)
+        tech_spec_doc = TechSpecDocument(project_id=new_project.project_id, content="")
+        tech_spec_doc.create()
 
         # get_by_id も string ID を受け付ける
         created_project = Project.find_by_id(new_project.project_id)
