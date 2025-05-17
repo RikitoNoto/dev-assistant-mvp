@@ -1,16 +1,16 @@
 from fastapi.testclient import TestClient
-from typing import TYPE_CHECKING, Dict, Any, Optional
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 from tests.fake_document_repository import FakeDocumentRepository
 
 
 if TYPE_CHECKING:
     from src.api import app
-    from src.models.document import Document
+    from src.models.document import PlanDocument, TechSpecDocument
     from src.repositories.documents import DocumentRepository
 else:
     from api import app
-    from models.document import Document
+    from models.document import PlanDocument, TechSpecDocument
     from repositories.documents import DocumentRepository
 
 
@@ -25,7 +25,7 @@ class TestPlanningDocumentAPI:
         self.client = TestClient(app)
         self.fake_repo = FakeDocumentRepository()
         # モデルに直接リポジトリを設定
-        Document.set_repository(self.fake_repo)
+        PlanDocument.set_repository(self.fake_repo)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
@@ -72,7 +72,7 @@ class TestPlanningDocumentAPI:
         updated_content = "Updated planning content in class"
 
         # 事前にドキュメントを作成しておく
-        initial_doc = Document(project_id=project_id, content=initial_content)
+        initial_doc = PlanDocument(project_id=project_id, content=initial_content)
         self.fake_repo.save_or_update(initial_doc.to_dict())
 
         data = self.save_or_update(content=updated_content, project_id=project_id)
@@ -91,7 +91,7 @@ class TestPlanningDocumentAPI:
         mock_repo = MagicMock()
         mock_repo.save_or_update.side_effect = Exception("Database error for plan")
         # モデルに直接モックリポジトリを設定
-        Document.set_repository(mock_repo)
+        PlanDocument.set_repository(mock_repo)
 
         data = self.save_or_update(
             content="Content",
@@ -102,7 +102,7 @@ class TestPlanningDocumentAPI:
         assert "detail" in data
         assert "Database error for plan" in data["detail"]
         # テスト後に元のリポジトリに戻す
-        Document.set_repository(self.fake_repo)
+        PlanDocument.set_repository(self.fake_repo)
 
     # --- GET Tests for Planning Document ---
 
@@ -110,7 +110,7 @@ class TestPlanningDocumentAPI:
         """GET /documents/plan/{project_id} (成功時) のテスト"""
         project_id = "plan-proj-get-success"
         content = "Planning content to get"
-        doc = Document(project_id=project_id, content=content)
+        doc = PlanDocument(project_id=project_id, content=content)
         self.fake_repo.save_or_update(doc.to_dict())  # 事前にデータを保存
         data = self.get(project_id=project_id)
         assert data["project_id"] == project_id
@@ -131,14 +131,14 @@ class TestPlanningDocumentAPI:
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.get_by_id.side_effect = Exception("Database error getting plan")
         # モデルに直接モックリポジトリを設定
-        Document.set_repository(mock_repo)
+        PlanDocument.set_repository(mock_repo)
         
         data = self.get(project_id=project_id, status_code=500)
         assert "detail" in data
         assert "Failed to get document: Database error getting plan" in data["detail"]
 
         # テスト後に元のリポジトリに戻す
-        Document.set_repository(self.fake_repo)
+        PlanDocument.set_repository(self.fake_repo)
 
 
 class TestTechSpecDocumentAPI:
@@ -149,7 +149,7 @@ class TestTechSpecDocumentAPI:
         self.client = TestClient(app)
         self.fake_repo = FakeDocumentRepository()
         # モデルに直接リポジトリを設定
-        Document.set_repository(self.fake_repo)
+        TechSpecDocument.set_repository(self.fake_repo)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
@@ -196,7 +196,7 @@ class TestTechSpecDocumentAPI:
         updated_content = "Updated tech spec content in class"
 
         # 事前にドキュメントを作成しておく
-        initial_doc = Document(project_id=project_id, content=initial_content)
+        initial_doc = TechSpecDocument(project_id=project_id, content=initial_content)
         self.fake_repo.save_or_update(initial_doc.to_dict())
 
         data = self.save_or_update(content=updated_content, project_id=project_id)
@@ -214,7 +214,7 @@ class TestTechSpecDocumentAPI:
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.save_or_update.side_effect = Exception("Database error for tech-spec")
         # モデルに直接モックリポジトリを設定
-        Document.set_repository(mock_repo)
+        TechSpecDocument.set_repository(mock_repo)
 
         data = self.save_or_update(
             content="Content",
@@ -225,7 +225,7 @@ class TestTechSpecDocumentAPI:
         assert "Database error for tech-spec" in data["detail"]
 
         # テスト後に元のリポジトリに戻す
-        Document.set_repository(self.fake_repo)
+        TechSpecDocument.set_repository(self.fake_repo)
 
     # --- GET Tests for Tech Spec Document ---
 
@@ -233,7 +233,7 @@ class TestTechSpecDocumentAPI:
         """GET /documents/tech-spec/{project_id} (成功時) のテスト"""
         project_id = "tech-proj-get-success"
         content = "Tech spec content to get"
-        doc = Document(project_id=project_id, content=content)
+        doc = TechSpecDocument(project_id=project_id, content=content)
         self.fake_repo.save_or_update(doc.to_dict())  # 事前にデータを保存
 
         data = self.get(project_id=project_id)
@@ -256,7 +256,7 @@ class TestTechSpecDocumentAPI:
         mock_repo = MagicMock(spec=DocumentRepository)
         mock_repo.get_by_id.side_effect = Exception("Database error getting tech-spec")
         # モデルに直接モックリポジトリを設定
-        Document.set_repository(mock_repo)
+        TechSpecDocument.set_repository(mock_repo)
         
         data = self.get(project_id=project_id, status_code=500)
         assert "detail" in data
@@ -265,4 +265,4 @@ class TestTechSpecDocumentAPI:
         )
 
         # テスト後に元のリポジトリに戻す
-        Document.set_repository(self.fake_repo)
+        TechSpecDocument.set_repository(self.fake_repo)
