@@ -68,15 +68,15 @@ class TestProject:
             
             # リポジトリにプロジェクトが追加されたことを確認
             assert len(self.fake_repository.get_all()) == 1
-            saved_project = self.fake_repository.get_by_id(project.project_id)
-            assert saved_project is not None
-            assert saved_project.title == "新規プロジェクト"
+            saved_project_data = self.fake_repository.get_by_id(project.project_id)
+            assert saved_project_data is not None
+            assert saved_project_data["title"] == "新規プロジェクト"
 
     def test_save_updates_existing_project_in_repository(self):
         """save メソッドが既存のプロジェクトを更新することをテスト"""
         # プロジェクトを作成して保存
         project = Project(project_id="test-id", title="元のタイトル")
-        self.fake_repository.save_or_update(project)
+        self.fake_repository.save_or_update(project.to_dict())
         
         # 同じIDで新しいプロジェクトを作成して更新
         updated_project = Project(project_id="test-id", title="更新後のタイトル")
@@ -86,9 +86,9 @@ class TestProject:
         assert len(self.fake_repository.get_all()) == 1
         
         # プロジェクトが更新されていることを確認
-        saved_project = self.fake_repository.get_by_id("test-id")
-        assert saved_project is not None
-        assert saved_project.title == "更新後のタイトル"
+        saved_project_data = self.fake_repository.get_by_id("test-id")
+        assert saved_project_data is not None
+        assert saved_project_data["title"] == "更新後のタイトル"
 
     def test_find_by_id_retrieves_project_from_repository(self):
         """find_by_id メソッドがリポジトリからプロジェクトを取得することをテスト"""
@@ -99,7 +99,7 @@ class TestProject:
             created_at=datetime(2023, 1, 1, 12, 0, 0),
             updated_at=datetime(2023, 1, 1, 12, 0, 0)
         )
-        self.fake_repository.save_or_update(test_project)
+        self.fake_repository.save_or_update(test_project.to_dict())
         
         # find_by_id メソッドを呼び出し
         result = Project.find_by_id("test-id")
@@ -131,9 +131,9 @@ class TestProject:
         project2 = Project(project_id="id-2", title="プロジェクト2")
         project3 = Project(project_id="id-3", title="プロジェクト3")
         
-        self.fake_repository.save_or_update(project1)
-        self.fake_repository.save_or_update(project2)
-        self.fake_repository.save_or_update(project3)
+        self.fake_repository.save_or_update(project1.to_dict())
+        self.fake_repository.save_or_update(project2.to_dict())
+        self.fake_repository.save_or_update(project3.to_dict())
         
         # find_all メソッドを呼び出し
         results = Project.find_all()
@@ -151,7 +151,7 @@ class TestProject:
         """delete メソッドがリポジトリからプロジェクトを削除することをテスト"""
         # プロジェクトを作成して保存
         project = Project(project_id="delete-id", title="削除プロジェクト")
-        self.fake_repository.save_or_update(project)
+        self.fake_repository.save_or_update(project.to_dict())
         
         # 保存されていることを確認
         assert len(self.fake_repository.get_all()) == 1

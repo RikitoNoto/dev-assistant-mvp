@@ -1,42 +1,28 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Dict, Any, List
 
-if TYPE_CHECKING:
-    from src.models.project import Project
-    from src.repositories.projects import ProjectRepository
-else:
-    from models.project import Project
-    from repositories.projects import ProjectRepository
+from src.repositories.projects import ProjectRepository
 
 class FakeProjectRepository(ProjectRepository):
     """インメモリでプロジェクトを管理するFakeリポジトリクラス"""
 
     def __init__(self):
-        self._projects: dict[str, Project] = {}
+        self._projects: Dict[str, Dict[str, Any]] = {}
 
 
-    def save_or_update(self, project: Project) -> str:
+    def save_or_update(self, project_data: Dict[str, Any]) -> str:
         """プロジェクトを保存または更新する"""
 
-        project_id = project.project_id
+        project_id = project_data["project_id"]
 
-        if project_id in self._projects:
-            updated_project = Project(
-                **project.model_dump(),
-            )
-            self._projects[project_id] = updated_project
-            return project_id
-        else:
-            new_project = Project(
-                **project.model_dump(),
-            )
-            self._projects[project_id] = new_project
-            return project_id
+        # 辞書のコピーを作成して保存
+        self._projects[project_id] = project_data.copy()
+        return project_id
 
-    def get_by_id(self, project_id: str) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """IDでプロジェクトを取得する"""
         return self._projects.get(project_id)
 
-    def get_all(self) -> list[Project]:
+    def get_all(self) -> List[Dict[str, Any]]:
         """すべてのプロジェクトを取得する"""
         return list(self._projects.values())
 

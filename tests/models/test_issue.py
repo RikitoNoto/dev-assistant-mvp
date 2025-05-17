@@ -1,4 +1,5 @@
 import uuid
+import pytest
 from datetime import datetime
 from tests.test_issues import FakeIssueRepository
 from typing import TYPE_CHECKING
@@ -74,9 +75,9 @@ class TestIssue:
             # リポジトリにIssueが追加されたことを確認
             issues = self.fake_repository.get_by_project_id(project_id)
             assert len(issues) == 1
-            saved_issue = self.fake_repository.get_by_id(project_id, issue.issue_id)
-            assert saved_issue is not None
-            assert saved_issue.title == "新規Issue"
+            saved_issue_data = self.fake_repository.get_by_id(project_id, issue.issue_id)
+            assert saved_issue_data is not None
+            assert saved_issue_data.get('title') == "新規Issue"
 
     def test_save_updates_existing_issue_in_repository(self):
         """save メソッドが既存のIssueを更新することをテスト"""
@@ -86,7 +87,7 @@ class TestIssue:
         
         # Issueを作成して保存
         issue = Issue(project_id=project_id, issue_id=issue_id, title="元のタイトル")
-        self.fake_repository.save_or_update(issue)
+        self.fake_repository.save_or_update(issue.to_dict())
         
         # 同じIDで新しいIssueを作成して更新
         updated_issue = Issue(project_id=project_id, issue_id=issue_id, title="更新後のタイトル")
@@ -97,9 +98,9 @@ class TestIssue:
         assert len(issues) == 1
         
         # Issueが更新されていることを確認
-        saved_issue = self.fake_repository.get_by_id(project_id, issue_id)
-        assert saved_issue is not None
-        assert saved_issue.title == "更新後のタイトル"
+        saved_issue_data = self.fake_repository.get_by_id(project_id, issue_id)
+        assert saved_issue_data is not None
+        assert saved_issue_data['title'] == "更新後のタイトル"
 
     def test_update_modifies_issue_properties(self):
         """update メソッドがIssueのプロパティを更新することをテスト"""
@@ -113,7 +114,7 @@ class TestIssue:
             description="元の説明",
             status="todo"
         )
-        self.fake_repository.save_or_update(issue)
+        self.fake_repository.save_or_update(issue.to_dict())
         
         # 更新前の状態を確認
         original_updated_at = issue.updated_at
@@ -122,13 +123,17 @@ class TestIssue:
         issue.update(title="更新後のタイトル", description="更新後の説明", status="in_progress")
         
         # 更新されたIssueを取得
-        updated_issue = self.fake_repository.get_by_id(project_id, issue_id)
+        updated_issue_data = self.fake_repository.get_by_id(project_id, issue_id)
         
         # プロパティが更新されていることを確認
-        assert updated_issue.title == "更新後のタイトル"
-        assert updated_issue.description == "更新後の説明"
-        assert updated_issue.status == "in_progress"
-        assert updated_issue.updated_at > original_updated_at
+        assert updated_issue_data is not None
+        assert updated_issue_data['title'] == "更新後のタイトル"
+        assert updated_issue_data['description'] == "更新後の説明"
+        assert updated_issue_data['status'] == "in_progress"
+        # datetime文字列を比較する場合は、元の値も文字列化する
+        updated_at = updated_issue_data['updated_at']
+        assert (updated_at > original_updated_at.isoformat() if isinstance(updated_at, str) 
+               else updated_at > original_updated_at)
 
     def test_find_by_id_retrieves_issue_from_repository(self):
         """find_by_id メソッドがリポジトリからIssueを取得することをテスト"""
@@ -144,7 +149,7 @@ class TestIssue:
             created_at=datetime(2023, 1, 1, 12, 0, 0),
             updated_at=datetime(2023, 1, 1, 12, 0, 0)
         )
-        self.fake_repository.save_or_update(test_issue)
+        self.fake_repository.save_or_update(test_issue.to_dict())
         
         # find_by_id メソッドを呼び出し
         result = Issue.find_by_id(project_id, issue_id)
@@ -182,14 +187,14 @@ class TestIssue:
         issue2 = Issue(project_id=project_id, issue_id="id-2", title="Issue2")
         issue3 = Issue(project_id=project_id, issue_id="id-3", title="Issue3")
         
-        self.fake_repository.save_or_update(issue1)
-        self.fake_repository.save_or_update(issue2)
-        self.fake_repository.save_or_update(issue3)
+        self.fake_repository.save_or_update(issue1.to_dict())
+        self.fake_repository.save_or_update(issue2.to_dict())
+        self.fake_repository.save_or_update(issue3.to_dict())
         
         # 別プロジェクトのIssueも追加
         other_project_id = "other-project"
         other_issue = Issue(project_id=other_project_id, issue_id="other-id", title="OtherIssue")
-        self.fake_repository.save_or_update(other_issue)
+        self.fake_repository.save_or_update(other_issue.to_dict())
         
         # find_by_project_id メソッドを呼び出し
         results = Issue.find_by_project_id(project_id)
@@ -202,6 +207,8 @@ class TestIssue:
         assert "id-1" in issue_ids
         assert "id-2" in issue_ids
         assert "id-3" in issue_ids
+        
+        # 別プロジェクトのIssueは含まれていないことを確認
         assert "other-id" not in issue_ids
 
     def test_delete_removes_issue_from_repository(self):
@@ -210,7 +217,7 @@ class TestIssue:
         project_id = "test-project"
         issue_id = "delete-id"
         issue = Issue(project_id=project_id, issue_id=issue_id, title="削除Issue")
-        self.fake_repository.save_or_update(issue)
+        self.fake_repository.save_or_update(issue.to_dict())
         
         # 保存されていることを確認
         assert self.fake_repository.get_by_id(project_id, issue_id) is not None

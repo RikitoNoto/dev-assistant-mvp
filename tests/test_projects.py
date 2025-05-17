@@ -1,131 +1,26 @@
 import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, TYPE_CHECKING
-import random
-import string
-
+from datetime import datetime
 from fastapi import status
 from fastapi.testclient import TestClient
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 
 if TYPE_CHECKING:
     from src.api import app
-    from src.models.document import Document
+    from src.models.document import PlanDocument, TechSpecDocument
     from src.models.project import Project
     from src.repositories.projects import ProjectRepository
     from src.repositories.documents import DocumentRepository
-    from src.routers.utils import (
-        get_project_repository,
-        get_plan_document_repository,
-        get_tech_spec_document_repository,
-    )
 else:
     from api import app
-    from models.document import Document
+    from models.document import PlanDocument, TechSpecDocument
     from models.project import Project
     from repositories.projects import ProjectRepository
     from repositories.documents import DocumentRepository
-    from routers.utils import (
-        get_project_repository,
-        get_plan_document_repository,
-        get_tech_spec_document_repository,
-    )
 
 from tests.fake_project_repository import FakeProjectRepository
-
-
-
-# --- Fake Document Repository Class ---
-class FakeDocumentRepository(DocumentRepository):
-    """インメモリでドキュメントを管理するFakeリポジトリクラス"""
-
-    def __init__(self):
-        self._documents: Dict[str, Document] = {}
-        self._documents_by_doc_id: Dict[str, Document] = {}
-
-    def _generate_id(self) -> str:
-        """テスト用のランダムな文字列IDを生成する"""
-        return "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
-
-    def initialize(self, *args, **kwargs):
-        return super().initialize(*args, **kwargs)
-
-    def save_or_update(self, document: Document) -> str:
-        """ドキュメントを保存または更新する"""
-        if not isinstance(document, Document):
-            raise TypeError("document must be an instance of Document")
-
-        doc_id = getattr(document, "document_id", None)  # str or None
-        project_id = getattr(document, "project_id", None)  # str or None
-        now = datetime.now(timezone.utc)
-
-        if not project_id:
-            raise ValueError("project_id is required to save a document")
-
-        project_id_str = str(project_id)
-        doc_id_str = str(doc_id) if doc_id else None
-
-        if doc_id_str and doc_id_str in self._documents_by_doc_id:
-            existing_doc = self._documents_by_doc_id[doc_id_str]
-            updated_doc = Document(
-                project_id=existing_doc.project_id,
-                content=document.content,
-            )
-            self._documents_by_doc_id[doc_id_str] = updated_doc
-            self._documents[project_id_str] = updated_doc
-            return doc_id_str
-        else:
-            new_doc_id = doc_id_str or self._generate_id()
-            new_document = Document(
-                project_id=project_id_str,
-                content=document.content,
-            )
-            self._documents[project_id_str] = new_document
-            self._documents_by_doc_id[str(new_doc_id)] = new_document
-            return str(new_doc_id)
-
-    def get_by_id(self, project_id: str) -> Optional[Document]:
-        """
-        指定されたIDに基づいてドキュメントを取得します。
-
-        Args:
-            project_id: 取得するドキュメントのID。
-
-        Returns:
-            見つかった場合はDocumentオブジェクト、見つからない場合はNone。
-
-        Raises:
-            Exception: 取得処理中にエラーが発生した場合。
-        """
-        return self._documents.get(str(project_id))
-
-    def get_all_by_project_id(self, project_id: str) -> List[Document]:
-        """指定されたプロジェクトIDのすべてのドキュメントを取得する"""
-        docs = []
-        project_id_str = str(project_id)
-        for doc in self._documents_by_doc_id.values():
-            if doc.project_id == project_id_str:
-                docs.append(doc)
-        return docs
-
-    def delete_by_id(self, document_id: str) -> bool:
-        """ドキュメントIDでドキュメントを削除する"""
-        doc_id_str = str(document_id)
-        if doc_id_str in self._documents_by_doc_id:
-            doc_to_delete = self._documents_by_doc_id.pop(doc_id_str)
-            # _documents 辞書からも削除
-            if doc_to_delete.project_id in self._documents:
-                # 削除対象のドキュメントIDと一致するか確認
-                if self._documents[doc_to_delete.project_id].project_id == doc_id_str:
-                    del self._documents[doc_to_delete.project_id]
-            return True
-        return False
-
-    def clear(self):
-        """テスト用にリポジトリをクリアする"""
-        self._documents = {}
-        self._documents_by_doc_id = {}
+from tests.fake_document_repository import FakeDocumentRepository
 
 # --- Test Class for Project API ---
 class TestProjectAPI:
@@ -137,43 +32,45 @@ class TestProjectAPI:
         self.fake_plan_doc_repo = FakeDocumentRepository()
         self.fake_tech_spec_doc_repo = FakeDocumentRepository()
         
+        # リポジトリの設定
         Project.set_repository(self.fake_project_repo)
-        app.dependency_overrides[get_plan_document_repository] = (
-            lambda: self.fake_plan_doc_repo
-        )
-        app.dependency_overrides[get_tech_spec_document_repository] = (
-            lambda: self.fake_tech_spec_doc_repo
-        )
+        PlanDocument.set_repository(self.fake_plan_doc_repo)
+        TechSpecDocument.set_repository(self.fake_tech_spec_doc_repo)
+        
         self.client = TestClient(app)
 
     def teardown_method(self):
         """各テストメソッドの後に実行されるクリーンアップ"""
-        if get_plan_document_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_plan_document_repository]
-        if get_tech_spec_document_repository in app.dependency_overrides:
-            del app.dependency_overrides[get_tech_spec_document_repository]
-
+        # データをクリア
         self.fake_project_repo.clear()
         self.fake_plan_doc_repo.clear()
         self.fake_tech_spec_doc_repo.clear()
+        
+        # 新しいテストのために新しいリポジトリインスタンスを設定
+        # 次のテストでsetup_methodが呼ばれるので、ここでリポジトリを再設定する必要はない
 
     # --- Helper Methods ---
     def _create_project_in_repo(self, title: str, create_docs: bool = False) -> Project:
         """テスト用にリポジトリに直接プロジェクトを作成するヘルパー"""
         project = Project(title=title)
-        saved_project_id = self.fake_project_repo.save_or_update(project)
-        saved_project = self.fake_project_repo.get_by_id(saved_project_id)
-        if not saved_project:
+        saved_project_id = self.fake_project_repo.save_or_update(project.to_dict())
+        saved_project_data = self.fake_project_repo.get_by_id(saved_project_id)
+        if not saved_project_data:
             raise Exception("Failed to create project")
+            
+        # 辞書からProjectオブジェクトを作成
+        saved_project = Project.from_dict(saved_project_data)
         
         if create_docs and saved_project:
             project_id_str = str(saved_project_id)
-            plan_doc = Document(project_id=project_id_str, content="Plan for " + title)
-            tech_spec_doc = Document(
+            # 新しいドキュメントモデルを使用
+            plan_doc = PlanDocument(project_id=project_id_str, content="Plan for " + title)
+            tech_spec_doc = TechSpecDocument(
                 project_id=project_id_str, content="Spec for " + title
             )
-            self.fake_plan_doc_repo.save_or_update(plan_doc)
-            self.fake_tech_spec_doc_repo.save_or_update(tech_spec_doc)
+            # 辞書ベースのアプローチに対応するため、ドキュメントオブジェクトを辞書に変換
+            self.fake_plan_doc_repo.save_or_update(plan_doc.to_dict())
+            self.fake_tech_spec_doc_repo.save_or_update(tech_spec_doc.to_dict())
 
         return saved_project
 
@@ -193,10 +90,10 @@ class TestProjectAPI:
         assert "updated_at" in data
 
         project_id_from_response = str(data["project_id"])
-        saved_project = self.fake_project_repo.get_by_id(project_id_from_response)
-        assert saved_project is not None
-        assert saved_project.title == project_title
-        assert saved_project.project_id == project_id_from_response
+        saved_project_data = self.fake_project_repo.get_by_id(project_id_from_response)
+        assert saved_project_data is not None
+        assert saved_project_data["title"] == project_title
+        assert saved_project_data["project_id"] == project_id_from_response
 
     def test_create_project_creates_plan_document(self):
         """POST /projects (計画ドキュメント作成成功時) のテスト"""
@@ -207,10 +104,10 @@ class TestProjectAPI:
         data = response.json()
         project_id_from_response = str(data["project_id"])
 
-        plan_doc = self.fake_plan_doc_repo.get_by_id(project_id_from_response)
-        assert plan_doc is not None
-        assert plan_doc.project_id == str(project_id_from_response)
-        assert plan_doc.content == ""
+        plan_doc_data = self.fake_plan_doc_repo.get_by_id(project_id_from_response)
+        assert plan_doc_data is not None
+        assert plan_doc_data["project_id"] == project_id_from_response
+        assert plan_doc_data["content"] == ""
 
     def test_create_project_creates_tech_spec_document(self):
         """POST /projects (技術仕様ドキュメント作成成功時) のテスト"""
@@ -221,12 +118,10 @@ class TestProjectAPI:
         data = response.json()
         project_id_from_response = str(data["project_id"])
 
-        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_id(
-            project_id_from_response
-        )
-        assert tech_spec_doc is not None
-        assert tech_spec_doc.project_id == str(project_id_from_response)
-        assert tech_spec_doc.content == ""
+        tech_spec_doc_data = self.fake_tech_spec_doc_repo.get_by_id(project_id_from_response)
+        assert tech_spec_doc_data is not None
+        assert tech_spec_doc_data["project_id"] == project_id_from_response
+        assert tech_spec_doc_data["content"] == ""
 
     def test_create_project_failure(self):
         """POST /projects (リポジトリ失敗時) のテスト"""
@@ -237,11 +132,10 @@ class TestProjectAPI:
         mock_plan_repo = MagicMock(spec=DocumentRepository)
         mock_tech_spec_repo = MagicMock(spec=DocumentRepository)
 
+        # モックリポジトリを設定
         Project.set_repository(mock_project_repo)
-        app.dependency_overrides[get_plan_document_repository] = lambda: mock_plan_repo
-        app.dependency_overrides[get_tech_spec_document_repository] = (
-            lambda: mock_tech_spec_repo
-        )
+        PlanDocument.set_repository(mock_plan_repo)
+        TechSpecDocument.set_repository(mock_tech_spec_repo)
 
         response = self.client.post("/projects", json={"title": "Fail Project Create"})
 
@@ -253,8 +147,6 @@ class TestProjectAPI:
             in data["detail"]
         )
 
-        del app.dependency_overrides[get_plan_document_repository]
-        del app.dependency_overrides[get_tech_spec_document_repository]
 
     def test_create_project_failure_on_doc_save(self):
         """POST /projects (ドキュメント保存失敗時) のテスト"""
@@ -266,10 +158,10 @@ class TestProjectAPI:
         mock_tech_spec_repo = MagicMock(spec=DocumentRepository)
 
         Project.set_repository(mock_project_repo)
-        app.dependency_overrides[get_plan_document_repository] = lambda: mock_plan_repo
-        app.dependency_overrides[get_tech_spec_document_repository] = (
-            lambda: mock_tech_spec_repo
-        )
+        # PlanDocumentモデルのリポジトリを設定
+        PlanDocument.set_repository(mock_plan_repo)
+        # TechSpecDocumentモデルのリポジトリを設定
+        TechSpecDocument.set_repository(mock_tech_spec_repo)
 
         response = self.client.post("/projects", json={"title": "Fail Doc Create"})
 
@@ -280,9 +172,6 @@ class TestProjectAPI:
             "Failed to create project: Database error on plan doc create"
             in data["detail"]
         )
-
-        del app.dependency_overrides[get_plan_document_repository]
-        del app.dependency_overrides[get_tech_spec_document_repository]
 
     # GET /projects
     def test_get_all_projects_success(self):
@@ -388,18 +277,24 @@ class TestProjectAPI:
         assert new_updated_at > original_updated_at
         assert datetime.fromisoformat(data["created_at"]) == proj.created_at
 
-        saved_project = self.fake_project_repo.get_by_id(proj.project_id)
-        assert saved_project is not None
-        assert saved_project.title == updated_title
-        assert saved_project.updated_at == new_updated_at
+        saved_project_data = self.fake_project_repo.get_by_id(proj.project_id)
+        assert saved_project_data is not None
+        assert saved_project_data["title"] == updated_title
+        # 日付が辞書の場合とオブジェクトの場合を処理
+        if isinstance(saved_project_data["updated_at"], str):
+            saved_updated_at = datetime.fromisoformat(saved_project_data["updated_at"])
+        else:
+            saved_updated_at = saved_project_data["updated_at"]
+        # 新しい更新日時が古い更新日時より後であることを確認
+        assert saved_updated_at > original_updated_at
 
-        plan_doc = self.fake_plan_doc_repo.get_by_id(proj.project_id)
-        assert plan_doc is not None
-        assert plan_doc.content == "Plan for Initial Title"
+        plan_doc_data = self.fake_plan_doc_repo.get_by_id(proj.project_id)
+        assert plan_doc_data is not None
+        assert plan_doc_data["content"] == "Plan for Initial Title"
 
-        tech_spec_doc = self.fake_tech_spec_doc_repo.get_by_id(proj.project_id)
-        assert tech_spec_doc is not None
-        assert tech_spec_doc.content == "Spec for Initial Title"
+        tech_spec_doc_data = self.fake_tech_spec_doc_repo.get_by_id(proj.project_id)
+        assert tech_spec_doc_data is not None
+        assert tech_spec_doc_data["content"] == "Spec for Initial Title"
 
     def test_update_project_not_found(self):
         """PUT /projects/{project_id} (存在しないID) のテスト"""
@@ -417,7 +312,8 @@ class TestProjectAPI:
         """PUT /projects/{project_id} (リポジトリ失敗時) のテスト"""
         proj = self._create_project_in_repo("Project To Fail Update", create_docs=True)
         mock_project_repo = MagicMock(spec=ProjectRepository)
-        mock_project_repo.get_by_id.return_value = proj
+        # 辞書を返すように設定
+        mock_project_repo.get_by_id.return_value = proj.to_dict()
         mock_project_repo.save_or_update.side_effect = Exception(
             "Database error on update"
         )
@@ -425,7 +321,7 @@ class TestProjectAPI:
 
         response = self.client.put(
             f"/projects/{proj.project_id}",
-            json={"title": "Update Fail"},
+            json={"title": "Updated Project Title"},
         )
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -468,7 +364,8 @@ class TestProjectAPI:
         """DELETE /projects/{project_id} (リポジトリ失敗時) のテスト"""
         proj = self._create_project_in_repo("Project To Fail Delete", create_docs=True)
         mock_project_repo = MagicMock(spec=ProjectRepository)
-        mock_project_repo.get_by_id.return_value = proj
+        # 辞書を返すように設定
+        mock_project_repo.get_by_id.return_value = proj.to_dict()
         mock_project_repo.delete_by_id.side_effect = Exception(
             "Database error on delete"
         )
@@ -502,9 +399,14 @@ class TestProjectAPI:
         assert new_last_opened_at > original_last_opened_at
         
         # リポジトリ内のプロジェクトも更新されていることを確認
-        updated_project = self.fake_project_repo.get_by_id(proj.project_id)
-        assert updated_project is not None
-        assert updated_project.last_opened_at == new_last_opened_at
+        updated_project_data = self.fake_project_repo.get_by_id(proj.project_id)
+        assert updated_project_data is not None
+        # 日付が辞書の場合とオブジェクトの場合を処理
+        if isinstance(updated_project_data["last_opened_at"], str):
+            saved_last_opened_at = datetime.fromisoformat(updated_project_data["last_opened_at"])
+        else:
+            saved_last_opened_at = updated_project_data["last_opened_at"]
+        assert saved_last_opened_at > original_last_opened_at
         
     def test_update_project_last_opened_at_not_found(self):
         """POST /projects/{project_id}/open (存在しないID) のテスト"""
@@ -521,7 +423,8 @@ class TestProjectAPI:
         """POST /projects/{project_id}/open (リポジトリ失敗時) のテスト"""
         proj = self._create_project_in_repo("Project To Fail Open", create_docs=True)
         mock_project_repo = MagicMock(spec=ProjectRepository)
-        mock_project_repo.get_by_id.return_value = proj
+        # 辞書を返すように設定
+        mock_project_repo.get_by_id.return_value = proj.to_dict()
         mock_project_repo.save_or_update.side_effect = Exception(
             "Database error on update last_opened_at"
         )

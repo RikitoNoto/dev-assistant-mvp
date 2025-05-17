@@ -1,12 +1,9 @@
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-
-if TYPE_CHECKING:
-    from models.document import Document
 
 
 class DocumentRepository(ABC):
@@ -23,12 +20,12 @@ class DocumentRepository(ABC):
         pass
 
     @abstractmethod
-    def save_or_update(self, document: Document) -> str:
+    def save_or_update(self, document_data: Dict[str, Any]) -> str:
         """
         企画ドキュメントを永続化ストレージに保存または更新します。
 
         Args:
-            document: 保存または更新するDocumentオブジェクト。
+            document_data: 保存または更新するドキュメントデータの辞書。
 
         Returns:
             保存または更新されたドキュメントのID。
@@ -39,7 +36,7 @@ class DocumentRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, project_id: str) -> Optional[Document]:
+    def get_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてドキュメントを取得します。
 
@@ -47,7 +44,7 @@ class DocumentRepository(ABC):
             project_id: 取得するドキュメントのID。
 
         Returns:
-            見つかった場合はDocumentオブジェクト、見つからない場合はNone。
+            見つかった場合はドキュメントデータの辞書、見つからない場合はNone。
 
         Raises:
             Exception: 取得処理中にエラーが発生した場合。
@@ -129,12 +126,12 @@ class DynamoDbDocumentRepository(
                 print(f"Error creating table: {e}")
                 raise
 
-    def save_or_update(self, document: Document) -> str:
+    def save_or_update(self, document_data: Dict[str, Any]) -> str:
         """
         企画ドキュメントをDynamoDBに保存または更新します。
 
         Args:
-            document: 保存または更新するDocumentオブジェクト。
+            document_data: 保存または更新するドキュメントデータの辞書。
 
         Returns:
             保存または更新されたドキュメントのID。
@@ -142,21 +139,28 @@ class DynamoDbDocumentRepository(
         Raises:
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
-        # project_id は Document オブジェクトに必ず含まれるため、None チェックは不要
-        project_id = document.project_id
+        # project_id は辞書に必ず含まれるため、None チェックは不要
+        project_id = document_data["project_id"]
 
         try:
-            self._table.put_item(
-                Item={"project_id": project_id, "content": document.content}
-            )
+            # created_atとupdated_atはISO形式の文字列として保存
+            item = {
+                "project_id": project_id,
+                "document_id": document_data["document_id"],
+                "content": document_data["content"],
+                "created_at": document_data["created_at"],
+                "updated_at": document_data["updated_at"]
+            }
+            
+            self._table.put_item(Item=item)
             return project_id
         except ClientError as e:
-            print(f"Error saving/updating document (ID: {document.project_id}): {e}")
+            print(f"Error saving/updating document (ID: {project_id}): {e}")
             raise Exception(
                 f"Failed to save/update document: {e.response['Error']['Message']}"
             ) from e
 
-    def get_by_id(self, project_id: str) -> Optional[Document]:
+    def get_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてドキュメントをDynamoDBから取得します。
 
@@ -164,7 +168,7 @@ class DynamoDbDocumentRepository(
             project_id: 取得するドキュメントのID。
 
         Returns:
-            見つかった場合はDocumentオブジェクト、見つからない場合はNone。
+            見つかった場合はドキュメントデータの辞書、見つからない場合はNone。
 
         Raises:
             Exception: DynamoDBからの読み取り中にエラーが発生した場合。
@@ -173,13 +177,15 @@ class DynamoDbDocumentRepository(
             response = self._table.get_item(Key={"project_id": project_id})
             item = response.get("Item")
             if item:
-                return Document(
-                    project_id=item["project_id"],
-                    document_id=item["project_id"],
-                    content=item["content"],
-                    created_at=datetime.now() if "created_at" not in item else item["created_at"],
-                    updated_at=datetime.now() if "updated_at" not in item else item["updated_at"]
-                )
+                # created_atとupdated_atが存在しない場合は現在時刻をISO形式で設定
+                if "created_at" not in item:
+                    item["created_at"] = datetime.now().isoformat()
+                if "updated_at" not in item:
+                    item["updated_at"] = datetime.now().isoformat()
+                if "document_id" not in item:
+                    item["document_id"] = item["project_id"]
+                    
+                return item
             else:
                 return None
         except ClientError as e:

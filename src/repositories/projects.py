@@ -3,10 +3,7 @@ import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from models.project import Project
+from typing import Optional, List, Dict, Any
 
 
 class ProjectRepository(ABC):
@@ -15,12 +12,12 @@ class ProjectRepository(ABC):
     """
 
     @abstractmethod
-    def save_or_update(self, project: Project) -> str:
+    def save_or_update(self, project_data: Dict[str, Any]) -> str:
         """
         プロジェクトを永続化ストレージに保存または更新します。
 
         Args:
-            project: 保存または更新するProjectオブジェクト。
+            project_data: 保存または更新するプロジェクトのデータ辞書。
 
         Returns:
             保存または更新されたプロジェクトのID。
@@ -31,7 +28,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, project_id: str) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてプロジェクトを取得します。
 
@@ -39,7 +36,7 @@ class ProjectRepository(ABC):
             project_id: 取得するプロジェクトのID。
 
         Returns:
-            見つかった場合はProjectオブジェクト、見つからない場合はNone。
+            見つかった場合はプロジェクトデータの辞書、見つからない場合はNone。
 
         Raises:
             Exception: 取得処理中にエラーが発生した場合。
@@ -47,13 +44,12 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_all(self) -> List[Project]:
-        pass
+    def get_all(self) -> List[Dict[str, Any]]:
         """
         すべてのプロジェクトを取得します。
 
         Returns:
-            プロジェクトのリスト。
+            プロジェクトデータの辞書のリスト。
 
         Raises:
             Exception: 取得処理中にエラーが発生した場合。
@@ -137,12 +133,12 @@ class DynamoDbProjectRepository(ProjectRepository):
             print("Table was not initialized. Initializing now.")
             self.initialize()
 
-    def save_or_update(self, project: Project) -> str:
+    def save_or_update(self, project_data: Dict[str, Any]) -> str:
         """
         プロジェクトをDynamoDBに保存または更新します。
 
         Args:
-            project: 保存または更新するProjectオブジェクト。
+            project_data: 保存または更新するプロジェクトのデータ辞書。
 
         Returns:
             保存または更新されたプロジェクトのID。
@@ -151,23 +147,25 @@ class DynamoDbProjectRepository(ProjectRepository):
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
         self._ensure_table_initialized()
-        project.updated_at = datetime.now()
+        project_data["updated_at"] = datetime.now().isoformat()
         try:
             item_to_save = {
-                "project_id": str(project.project_id),
-                "title": project.title,
-                "created_at": project.created_at.isoformat(),
-                "updated_at": project.updated_at.isoformat(),
+                "project_id": str(project_data["project_id"]),
+                "title": project_data["title"],
+                "created_at": project_data["created_at"] if isinstance(project_data["created_at"], str) else project_data["created_at"].isoformat(),
+                "updated_at": project_data["updated_at"] if isinstance(project_data["updated_at"], str) else project_data["updated_at"].isoformat(),
             }
+            if "last_opened_at" in project_data:
+                item_to_save["last_opened_at"] = project_data["last_opened_at"] if isinstance(project_data["last_opened_at"], str) else project_data["last_opened_at"].isoformat()
             self._table.put_item(Item=item_to_save)
-            return project.project_id
+            return project_data["project_id"]
         except ClientError as e:
-            print(f"Error saving/updating project (ID: {project.project_id}): {e}")
+            print(f"Error saving/updating project (ID: {project_data['project_id']}): {e}")
             raise Exception(
                 f"Failed to save/update project: {e.response['Error']['Message']}"
             ) from e
 
-    def get_by_id(self, project_id: str) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてプロジェクトをDynamoDBから取得します。
 
@@ -175,7 +173,7 @@ class DynamoDbProjectRepository(ProjectRepository):
             project_id: 取得するプロジェクトのID。
 
         Returns:
-            見つかった場合はProjectオブジェクト、見つからない場合はNone。
+            見つかった場合はプロジェクトデータの辞書、見つからない場合はNone。
 
         Raises:
             Exception: DynamoDBからの読み取り中にエラーが発生した場合。
@@ -185,12 +183,13 @@ class DynamoDbProjectRepository(ProjectRepository):
             response = self._table.get_item(Key={"project_id": project_id})
             item = response.get("Item")
             if item:
-                return Project(
-                    project_id=item["project_id"],
-                    title=item["title"],
-                    created_at=datetime.fromisoformat(item["created_at"]),
-                    updated_at=datetime.fromisoformat(item["updated_at"]),
-                )
+                return {
+                    "project_id": item["project_id"],
+                    "title": item["title"],
+                    "created_at": item["created_at"],
+                    "updated_at": item["updated_at"],
+                    "last_opened_at": item.get("last_opened_at", item["created_at"])
+                }
             else:
                 return None
         except ClientError as e:
@@ -202,34 +201,34 @@ class DynamoDbProjectRepository(ProjectRepository):
             print(f"Error converting data for project (ID: {project_id}): {e}")
             raise Exception(f"Data conversion error for project: {e}") from e
 
-    def get_all(self) -> List[Project]:
+    def get_all(self) -> List[Dict[str, Any]]:
         """
         すべてのプロジェクトをDynamoDBから取得します。
 
         Returns:
-            プロジェクトのリスト。
+            プロジェクトデータの辞書のリスト。
 
         Raises:
             Exception: DynamoDBからの読み取り中にエラーが発生した場合。
         """
         self._ensure_table_initialized()
-        projects = []
         try:
             response = self._table.scan()
             items = response.get("Items", [])
+            projects = []
             for item in items:
                 try:
-                    projects.append(
-                        Project(
-                            project_id=item["project_id"],
-                            title=item["title"],
-                            created_at=datetime.fromisoformat(item["created_at"]),
-                            updated_at=datetime.fromisoformat(item["updated_at"]),
-                        )
-                    )
-                except ValueError as e:
-                    print(f"Skipping item due to conversion error: {item}, Error: {e}")
-
+                    project_data = {
+                        "project_id": item["project_id"],
+                        "title": item["title"],
+                        "created_at": item["created_at"],
+                        "updated_at": item["updated_at"],
+                        "last_opened_at": item.get("last_opened_at", item["created_at"])
+                    }
+                    projects.append(project_data)
+                except KeyError as e:
+                    print(f"Error parsing project data: {e}")
+                    continue
             while "LastEvaluatedKey" in response:
                 response = self._table.scan(
                     ExclusiveStartKey=response["LastEvaluatedKey"]
@@ -237,14 +236,17 @@ class DynamoDbProjectRepository(ProjectRepository):
                 items = response.get("Items", [])
                 for item in items:
                     try:
-                        projects.append(
-                            Project(
-                                project_id=item["project_id"],
-                                title=item["title"],
-                                created_at=datetime.fromisoformat(item["created_at"]),
-                                updated_at=datetime.fromisoformat(item["updated_at"]),
-                            )
-                        )
+                        project_data = {
+                            "project_id": item["project_id"],
+                            "title": item["title"],
+                            "created_at": item["created_at"],
+                            "updated_at": item["updated_at"],
+                            "last_opened_at": item.get("last_opened_at", item["created_at"])
+                        }
+                        projects.append(project_data)
+                    except KeyError as e:
+                        print(f"Error parsing project data: {e}")
+                        continue
                     except ValueError as e:
                         print(
                             f"Skipping item due to conversion error: {item}, Error: {e}"

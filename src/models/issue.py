@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from routers.utils import get_issue_repository
 from repositories.issues import IssueRepository
-from typing import Optional, ClassVar, Self, List
+from typing import Optional, ClassVar, Self, List, Dict, Any
 from uuid import uuid4
 
 
@@ -58,6 +58,53 @@ class Issue(BaseModel):
             cls._repository = get_issue_repository()
         return cls._repository
     
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Issueをディクショナリに変換します。
+        
+        Returns:
+            Dict[str, Any]: Issueのデータを含むディクショナリ
+        """
+        return {
+            "issue_id": self.issue_id,
+            "project_id": self.project_id,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Self:
+        """
+        ディクショナリからIssueを作成します。
+        
+        Args:
+            data: Issueデータを含むディクショナリ
+            
+        Returns:
+            Self: 作成されたIssueインスタンス
+        """
+        # ISO形式の日付文字列をdatetimeオブジェクトに変換
+        created_at = data["created_at"]
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+            
+        updated_at = data["updated_at"]
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at)
+            
+        return cls(
+            issue_id=data["issue_id"],
+            project_id=data["project_id"],
+            title=data["title"],
+            description=data.get("description", ""),
+            status=data.get("status", "todo"),
+            created_at=created_at,
+            updated_at=updated_at
+        )
+    
     def create(self) -> Self:
         """
         新しいIssueを作成します。
@@ -65,7 +112,7 @@ class Issue(BaseModel):
         Returns:
             Self: 作成されたIssueのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def save(self) -> Self:
@@ -75,7 +122,7 @@ class Issue(BaseModel):
         Returns:
             Self: 保存されたIssueのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def update(self, **kwargs) -> Self:
@@ -102,7 +149,10 @@ class Issue(BaseModel):
         Returns:
             Optional[Self]: 見つかったIssue、または見つからない場合はNone
         """
-        return cls.get_repository().get_by_id(project_id, issue_id)
+        issue_data = cls.get_repository().get_by_id(project_id, issue_id)
+        if issue_data is None:
+            return None
+        return cls.from_dict(issue_data)
     
     @classmethod
     def find_by_project_id(cls, project_id: str) -> List["Issue"]:
@@ -115,7 +165,8 @@ class Issue(BaseModel):
         Returns:
             List[Self]: Issueのリスト
         """
-        return cls.get_repository().get_by_project_id(project_id)
+        issues_data = cls.get_repository().get_by_project_id(project_id)
+        return [cls.from_dict(item) for item in issues_data]
     
     def delete(self) -> None:
         """
