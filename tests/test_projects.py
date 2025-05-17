@@ -161,10 +161,13 @@ class TestProjectAPI:
     def _create_project_in_repo(self, title: str, create_docs: bool = False) -> Project:
         """テスト用にリポジトリに直接プロジェクトを作成するヘルパー"""
         project = Project(title=title)
-        saved_project_id = self.fake_project_repo.save_or_update(project)
-        saved_project = self.fake_project_repo.get_by_id(saved_project_id)
-        if not saved_project:
+        saved_project_id = self.fake_project_repo.save_or_update(project.to_dict())
+        saved_project_data = self.fake_project_repo.get_by_id(saved_project_id)
+        if not saved_project_data:
             raise Exception("Failed to create project")
+            
+        # 辞書からProjectオブジェクトを作成
+        saved_project = Project.from_dict(saved_project_data)
         
         if create_docs and saved_project:
             project_id_str = str(saved_project_id)
@@ -193,10 +196,10 @@ class TestProjectAPI:
         assert "updated_at" in data
 
         project_id_from_response = str(data["project_id"])
-        saved_project = self.fake_project_repo.get_by_id(project_id_from_response)
-        assert saved_project is not None
-        assert saved_project.title == project_title
-        assert saved_project.project_id == project_id_from_response
+        saved_project_data = self.fake_project_repo.get_by_id(project_id_from_response)
+        assert saved_project_data is not None
+        assert saved_project_data["title"] == project_title
+        assert saved_project_data["project_id"] == project_id_from_response
 
     def test_create_project_creates_plan_document(self):
         """POST /projects (計画ドキュメント作成成功時) のテスト"""
@@ -388,10 +391,12 @@ class TestProjectAPI:
         assert new_updated_at > original_updated_at
         assert datetime.fromisoformat(data["created_at"]) == proj.created_at
 
-        saved_project = self.fake_project_repo.get_by_id(proj.project_id)
-        assert saved_project is not None
-        assert saved_project.title == updated_title
-        assert saved_project.updated_at == new_updated_at
+        saved_project_data = self.fake_project_repo.get_by_id(proj.project_id)
+        assert saved_project_data is not None
+        assert saved_project_data["title"] == updated_title
+        # 日付文字列をdatetimeに変換して比較
+        saved_updated_at = datetime.fromisoformat(saved_project_data["updated_at"])
+        assert saved_updated_at == new_updated_at
 
         plan_doc = self.fake_plan_doc_repo.get_by_id(proj.project_id)
         assert plan_doc is not None
@@ -502,9 +507,11 @@ class TestProjectAPI:
         assert new_last_opened_at > original_last_opened_at
         
         # リポジトリ内のプロジェクトも更新されていることを確認
-        updated_project = self.fake_project_repo.get_by_id(proj.project_id)
-        assert updated_project is not None
-        assert updated_project.last_opened_at == new_last_opened_at
+        updated_project_data = self.fake_project_repo.get_by_id(proj.project_id)
+        assert updated_project_data is not None
+        # 日付文字列をdatetimeに変換して比較
+        saved_last_opened_at = datetime.fromisoformat(updated_project_data["last_opened_at"])
+        assert saved_last_opened_at == new_last_opened_at
         
     def test_update_project_last_opened_at_not_found(self):
         """POST /projects/{project_id}/open (存在しないID) のテスト"""

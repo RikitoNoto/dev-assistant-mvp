@@ -55,6 +55,53 @@ class Project(BaseModel):
             cls._repository = get_project_repository()
         return cls._repository
     
+    def to_dict(self) -> dict:
+        """
+        プロジェクトをディクショナリに変換します。
+        
+        Returns:
+            dict: プロジェクトのデータを含むディクショナリ
+        """
+        return {
+            "project_id": self.project_id,
+            "title": self.title,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "last_opened_at": self.last_opened_at
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        """
+        ディクショナリからプロジェクトを作成します。
+        
+        Args:
+            data: プロジェクトデータを含むディクショナリ
+            
+        Returns:
+            Self: 作成されたプロジェクトインスタンス
+        """
+        # ISO形式の日付文字列をdatetimeオブジェクトに変換
+        created_at = data["created_at"]
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+            
+        updated_at = data["updated_at"]
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at)
+            
+        last_opened_at = data.get("last_opened_at", created_at)
+        if isinstance(last_opened_at, str):
+            last_opened_at = datetime.fromisoformat(last_opened_at)
+            
+        return cls(
+            project_id=data["project_id"],
+            title=data["title"],
+            created_at=created_at,
+            updated_at=updated_at,
+            last_opened_at=last_opened_at
+        )
+    
     def create(self) -> Self:
         """
         新しいプロジェクトを作成します。
@@ -62,7 +109,7 @@ class Project(BaseModel):
         Returns:
             Self: 作成されたプロジェクトのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def save(self) -> Self:
@@ -72,7 +119,7 @@ class Project(BaseModel):
         Returns:
             Self: 保存されたプロジェクトのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def update(self, **kwargs) -> Self:
@@ -98,7 +145,10 @@ class Project(BaseModel):
         Returns:
             Optional[Self]: 見つかったプロジェクト、または見つからない場合はNone
         """
-        return cls.get_repository().get_by_id(project_id)
+        project_data = cls.get_repository().get_by_id(project_id)
+        if project_data is None:
+            return None
+        return cls.from_dict(project_data)
     
     @classmethod
     def find_all(cls) -> list["Project"]:
@@ -108,7 +158,8 @@ class Project(BaseModel):
         Returns:
             list[Self]: プロジェクトのリスト
         """
-        return cls.get_repository().get_all()
+        projects_data = cls.get_repository().get_all()
+        return [cls.from_dict(project_data) for project_data in projects_data]
     
     def delete(self) -> bool:
         """
