@@ -1,11 +1,8 @@
 from __future__ import annotations
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Dict, Any
 import boto3
 from abc import ABC, abstractmethod
 from botocore.exceptions import ClientError
-
-if TYPE_CHECKING:
-    from models.issue import Issue
 
 class IssueRepository(ABC):
     """
@@ -21,12 +18,12 @@ class IssueRepository(ABC):
         pass
 
     @abstractmethod
-    def save_or_update(self, issue: Issue) -> str:
+    def save_or_update(self, issue_data: Dict[str, Any]) -> str:
         """
         Issueを永続化ストレージに保存または更新します。
 
         Args:
-            issue: 保存または更新するIssueオブジェクト。
+            issue_data: 保存または更新するIssueデータの辞書。
 
         Returns:
             保存または更新されたIssueのID。
@@ -37,7 +34,7 @@ class IssueRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Issue]:
+    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてIssueを取得します。
 
@@ -46,7 +43,7 @@ class IssueRepository(ABC):
             issue_id: 取得するIssueのID。
 
         Returns:
-            見つかった場合はIssueオブジェクト、見つからない場合はNone。
+            見つかった場合はIssueデータの辞書、見つからない場合はNone。
 
         Raises:
             Exception: 取得処理中にエラーが発生した場合。
@@ -54,7 +51,7 @@ class IssueRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_project_id(self, project_id: str) -> List[Issue]:
+    def get_by_project_id(self, project_id: str) -> List[Dict[str, Any]]:
         """
         指定されたプロジェクトIDに属する全てのIssueを取得します。
 
@@ -62,7 +59,7 @@ class IssueRepository(ABC):
             project_id: Issueが属するプロジェクトのID。
 
         Returns:
-            Issueオブジェクトのリスト。
+            Issueデータの辞書のリスト。
 
         Raises:
             Exception: 取得処理中にエラーが発生した場合。
@@ -135,29 +132,27 @@ class DynamoDbIssueRepository(IssueRepository):
                 print(f"Error creating table: {e}")
                 raise
 
-    def save_or_update(self, issue: Issue) -> str:
+    def save_or_update(self, issue_data: Dict[str, Any]) -> str:
         """
         IssueをDynamoDBに保存または更新します。
         """
         try:
-            item = {
-                "project_id": issue.project_id,
-                "issue_id": issue.issue_id,
-                "title": issue.title,
-                "description": issue.description,
-                "status": issue.status,
-                "created_at": issue.created_at.isoformat(),
-                "updated_at": issue.updated_at.isoformat(),
-            }
+            # created_atとupdated_atがdatetimeオブジェクトの場合、ISO形式の文字列に変換
+            item = issue_data.copy()
+            if 'created_at' in item and hasattr(item['created_at'], 'isoformat'):
+                item['created_at'] = item['created_at'].isoformat()
+            if 'updated_at' in item and hasattr(item['updated_at'], 'isoformat'):
+                item['updated_at'] = item['updated_at'].isoformat()
+                
             self._table.put_item(Item=item)
-            return issue.issue_id
+            return issue_data['issue_id']
         except ClientError as e:
-            print(f"Error saving/updating issue (ID: {issue.issue_id}): {e}")
+            print(f"Error saving/updating issue (ID: {issue_data['issue_id']}): {e}")
             raise Exception(
                 f"Failed to save/update issue: {e.response['Error']['Message']}"
             ) from e
 
-    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Issue]:
+    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Dict[str, Any]]:
         """
         指定されたIDに基づいてIssueをDynamoDBから取得します。
         """
@@ -173,17 +168,14 @@ class DynamoDbIssueRepository(IssueRepository):
                 }
             )
             item = response.get("Item")
-            if item:
-                return Issue(**item)
-            else:
-                return None
+            return item
         except ClientError as e:
             print(f"Error getting issue (Project ID: {project_id}, Issue ID: {issue_id}): {e}")
             raise Exception(
                 f"Failed to get issue: {e.response['Error']['Message']}"
             ) from e
 
-    def get_by_project_id(self, project_id: str) -> List[Issue]:
+    def get_by_project_id(self, project_id: str) -> List[Dict[str, Any]]:
         """
         指定されたプロジェクトIDに属する全てのIssueをDynamoDBから取得します。
         """
@@ -194,7 +186,7 @@ class DynamoDbIssueRepository(IssueRepository):
                 )
             )
             items = response.get("Items", [])
-            return [Issue(**item) for item in items]
+            return items
         except ClientError as e:
             print(f"Error getting issues for project (ID: {project_id}): {e}")
             raise Exception(

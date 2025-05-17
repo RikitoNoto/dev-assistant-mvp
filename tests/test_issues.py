@@ -2,7 +2,7 @@ import time
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 from datetime import datetime
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING, Any
 import random
 import string
 from fastapi import status
@@ -34,26 +34,29 @@ class FakeIssueRepository(IssueRepository):
     def initialize(self, *args, **kwargs):
         return super().initialize(*args, **kwargs)
 
-    def save_or_update(self, issue: Issue) -> str:
-        if not isinstance(issue, Issue):
-            raise TypeError("issue must be an instance of Issue")
-        if not issue.project_id:
+    def save_or_update(self, issue_data: Dict[str, Any]) -> str:
+        if not isinstance(issue_data, dict):
+            raise TypeError("issue_data must be a dictionary")
+        if not issue_data.get('project_id'):
             raise ValueError("project_id is required")
         
         # プロジェクトIDに対応する辞書がなければ作成
-        if issue.project_id not in self._issues:
-            self._issues[issue.project_id] = {}
+        project_id = issue_data['project_id']
+        issue_id = issue_data['issue_id']
+        
+        if project_id not in self._issues:
+            self._issues[project_id] = {}
         
         # Issueを保存
-        self._issues[issue.project_id][issue.issue_id] = issue
-        return issue.issue_id
+        self._issues[project_id][issue_id] = issue_data
+        return issue_id
 
-    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Issue]:
+    def get_by_id(self, project_id: str, issue_id: str) -> Optional[Dict[str, Any]]:
         if project_id not in self._issues:
             return None
         return self._issues[project_id].get(issue_id)
 
-    def get_by_project_id(self, project_id: str) -> List[Issue]:
+    def get_by_project_id(self, project_id: str) -> List[Dict[str, Any]]:
         if project_id not in self._issues:
             return []
         return list(self._issues[project_id].values())
@@ -408,11 +411,7 @@ class TestIssueAPI:
         # deleteが例外を発生させるモックを作成
         mock_repo = MagicMock(spec=IssueRepository)
         # get_by_idは成功するがdeleteで失敗するようにする
-        mock_repo.get_by_id.return_value = Issue(
-            issue_id=issue_id,
-            project_id=project_id,
-            title=title,
-        )
+        mock_repo.get_by_id.return_value = issue.to_dict()
         mock_repo.delete.side_effect = Exception("Database error deleting issue")
         
         # Issueモデルにモックリポジトリを設定
