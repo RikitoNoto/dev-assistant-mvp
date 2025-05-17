@@ -1,41 +1,17 @@
 from fastapi.testclient import TestClient
 from typing import TYPE_CHECKING, Dict, Any, Optional
 from unittest.mock import MagicMock
+from tests.fake_document_repository import FakeDocumentRepository
 
 
 if TYPE_CHECKING:
     from src.api import app
     from src.models.document import Document
+    from src.repositories.documents import DocumentRepository
 else:
     from api import app
     from models.document import Document
-
-
-# --- Fake リポジトリクラス (変更なし) ---
-class FakeDocumentRepository:
-    """インメモリでドキュメントを管理するFakeリポジトリクラス"""
-
-    def __init__(self):
-        self._documents = {}
-
-    def save_or_update(self, document_data: Dict[str, Any]) -> str:
-        if not isinstance(document_data, dict):
-            raise TypeError("document_data must be a dictionary")
-        if "project_id" not in document_data:
-            raise ValueError("project_id is required")
-        self._documents[document_data["project_id"]] = document_data
-        # APIルーターが返すIDと一致させるため、元のproject_idを返す
-        return document_data["project_id"]
-
-    def get_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
-        # ルーターで使用されているメソッドを追加
-        return self._documents.get(document_id)
-
-    def clear(self):
-        self._documents = {}
-
-    def initialize(self, *args, **kwargs):
-        pass
+    from repositories.documents import DocumentRepository
 
 
 # --- テストクラス ---
@@ -86,8 +62,8 @@ class TestPlanningDocumentAPI:
 
         saved_document = self.fake_repo.get_by_id(project_id)
         assert saved_document is not None
-        assert saved_document.project_id == project_id
-        assert saved_document.content == content
+        assert saved_document["project_id"] == project_id
+        assert saved_document["content"] == content
 
     def test_save_or_update_planning_document_update(self):
         """POST /documents/plan (更新時) のテスト"""
@@ -97,7 +73,7 @@ class TestPlanningDocumentAPI:
 
         # 事前にドキュメントを作成しておく
         initial_doc = Document(project_id=project_id, content=initial_content)
-        self.fake_repo.save_or_update(initial_doc)
+        self.fake_repo.save_or_update(initial_doc.to_dict())
 
         data = self.save_or_update(content=updated_content, project_id=project_id)
 
@@ -106,8 +82,8 @@ class TestPlanningDocumentAPI:
         # アサーション (Fakeリポジトリの状態)
         saved_document = self.fake_repo.get_by_id(project_id)
         assert saved_document is not None
-        assert saved_document.project_id == project_id
-        assert saved_document.content == updated_content
+        assert saved_document["project_id"] == project_id
+        assert saved_document["content"] == updated_content
 
     def test_save_or_update_planning_document_failure(self):
         """POST /documents/plan (リポジトリ失敗時) のテスト"""
@@ -135,7 +111,7 @@ class TestPlanningDocumentAPI:
         project_id = "plan-proj-get-success"
         content = "Planning content to get"
         doc = Document(project_id=project_id, content=content)
-        self.fake_repo.save_or_update(doc)  # 事前にデータを保存
+        self.fake_repo.save_or_update(doc.to_dict())  # 事前にデータを保存
         data = self.get(project_id=project_id)
         assert data["project_id"] == project_id
         assert data["content"] == content
@@ -210,8 +186,8 @@ class TestTechSpecDocumentAPI:
         # アサーション (Fakeリポジトリの状態)
         saved_document = self.fake_repo.get_by_id(project_id)
         assert saved_document is not None
-        assert saved_document.project_id == project_id
-        assert saved_document.content == content
+        assert saved_document["project_id"] == project_id
+        assert saved_document["content"] == content
 
     def test_save_or_update_tech_spec_document_update(self):
         """POST /documents/tech-spec (更新時) のテスト"""
@@ -221,7 +197,7 @@ class TestTechSpecDocumentAPI:
 
         # 事前にドキュメントを作成しておく
         initial_doc = Document(project_id=project_id, content=initial_content)
-        self.fake_repo.save_or_update(initial_doc)
+        self.fake_repo.save_or_update(initial_doc.to_dict())
 
         data = self.save_or_update(content=updated_content, project_id=project_id)
         assert data == {"project_id": project_id, "status": "success"}
@@ -229,8 +205,8 @@ class TestTechSpecDocumentAPI:
         # アサーション (Fakeリポジトリの状態)
         saved_document = self.fake_repo.get_by_id(project_id)
         assert saved_document is not None
-        assert saved_document.project_id == project_id
-        assert saved_document.content == updated_content
+        assert saved_document["project_id"] == project_id
+        assert saved_document["content"] == updated_content
 
     def test_save_or_update_tech_spec_document_failure(self):
         """POST /documents/tech-spec (リポジトリ失敗時) のテスト"""
@@ -258,7 +234,7 @@ class TestTechSpecDocumentAPI:
         project_id = "tech-proj-get-success"
         content = "Tech spec content to get"
         doc = Document(project_id=project_id, content=content)
-        self.fake_repo.save_or_update(doc)  # 事前にデータを保存
+        self.fake_repo.save_or_update(doc.to_dict())  # 事前にデータを保存
 
         data = self.get(project_id=project_id)
 

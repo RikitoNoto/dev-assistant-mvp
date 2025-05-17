@@ -1,6 +1,6 @@
 from datetime import datetime
 from unittest.mock import patch, MagicMock
-from tests.test_documents import FakeDocumentRepository
+from tests.fake_document_repository import FakeDocumentRepository
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
