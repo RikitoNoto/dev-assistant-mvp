@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import Optional, ClassVar, Self
+from typing import Optional, ClassVar, Self, Dict, Any
 from pydantic import BaseModel
 from repositories.documents import DocumentRepository
 from routers.utils import get_plan_document_repository
@@ -28,6 +28,49 @@ class Document(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        モデルを辞書に変換します
+        
+        Returns:
+            Dict[str, Any]: モデルの辞書表現
+        """
+        return {
+            "project_id": self.project_id,
+            "document_id": self.document_id,
+            "content": self.content,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Self:
+        """
+        辞書からモデルを作成します
+        
+        Args:
+            data: モデルデータを含む辞書
+            
+        Returns:
+            Self: 作成されたモデルインスタンス
+        """
+        # ISO形式の日付文字列をdatetimeオブジェクトに変換
+        created_at = data.get("created_at")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+        
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at)
+        
+        return cls(
+            project_id=data["project_id"],
+            document_id=data["document_id"],
+            content=data["content"],
+            created_at=created_at,
+            updated_at=updated_at
+        )
     
     @classmethod
     def set_repository(cls, repository: DocumentRepository) -> None:
@@ -58,7 +101,7 @@ class Document(BaseModel):
         Returns:
             Self: 作成されたドキュメントのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def save(self) -> Self:
@@ -68,7 +111,7 @@ class Document(BaseModel):
         Returns:
             Self: 保存されたドキュメントのインスタンス
         """
-        self.get_repository().save_or_update(self)
+        self.get_repository().save_or_update(self.to_dict())
         return self
     
     def update(self, **kwargs) -> Self:
@@ -94,4 +137,5 @@ class Document(BaseModel):
         Returns:
             Optional[Self]: 見つかったドキュメント、または見つからない場合はNone
         """
-        return cls.get_repository().get_by_id(project_id)
+        data = cls.get_repository().get_by_id(project_id)
+        return cls.from_dict(data) if data else None

@@ -1,35 +1,33 @@
 from fastapi.testclient import TestClient
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Any, Optional
 from unittest.mock import MagicMock
 
 
 if TYPE_CHECKING:
     from src.api import app
     from src.models.document import Document
-    from src.repositories.documents import DocumentRepository
 else:
     from api import app
     from models.document import Document
-    from repositories.documents import DocumentRepository
 
 
 # --- Fake リポジトリクラス (変更なし) ---
-class FakeDocumentRepository(DocumentRepository):
+class FakeDocumentRepository:
     """インメモリでドキュメントを管理するFakeリポジトリクラス"""
 
     def __init__(self):
         self._documents = {}
 
-    def save_or_update(self, document: Document) -> str:
-        if not isinstance(document, Document):
-            raise TypeError("document must be an instance of Document")
-        if not document.project_id:
+    def save_or_update(self, document_data: Dict[str, Any]) -> str:
+        if not isinstance(document_data, dict):
+            raise TypeError("document_data must be a dictionary")
+        if "project_id" not in document_data:
             raise ValueError("project_id is required")
-        self._documents[document.project_id] = document
+        self._documents[document_data["project_id"]] = document_data
         # APIルーターが返すIDと一致させるため、元のproject_idを返す
-        return document.project_id
+        return document_data["project_id"]
 
-    def get_by_id(self, document_id: str) -> Document | None:
+    def get_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
         # ルーターで使用されているメソッドを追加
         return self._documents.get(document_id)
 
@@ -37,7 +35,7 @@ class FakeDocumentRepository(DocumentRepository):
         self._documents = {}
 
     def initialize(self, *args, **kwargs):
-        return super().initialize(*args, **kwargs)
+        pass
 
 
 # --- テストクラス ---
@@ -114,7 +112,7 @@ class TestPlanningDocumentAPI:
     def test_save_or_update_planning_document_failure(self):
         """POST /documents/plan (リポジトリ失敗時) のテスト"""
         # save_or_updateが例外を発生させるリポジトリのモックを作成
-        mock_repo = MagicMock(spec=DocumentRepository)
+        mock_repo = MagicMock()
         mock_repo.save_or_update.side_effect = Exception("Database error for plan")
         # モデルに直接モックリポジトリを設定
         Document.set_repository(mock_repo)
