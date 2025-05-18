@@ -5,7 +5,9 @@ from fastapi.responses import StreamingResponse
 from planner import PlannerBot
 from tech_spec import TechSpecBot
 from issue_generator import IssueGenerator
+from models.issue import Issue
 from models.models import ChatAndEdit
+from models.document import PlanDocument, TechSpecDocument
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,
@@ -77,14 +79,13 @@ async def chat_plan_stream(chat_and_edit_param: ChatAndEdit):
     Stream chat responses from PlannerBot in JSON format (ndjson).
     """
     bot = PlannerBot()
-    repo = get_plan_document_repository()
-    plan = repo.get_by_id(chat_and_edit_param.project_id)
+    plan = PlanDocument.find_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
         process_stream(
             bot,
             chat_and_edit_param.message,
-            history=chat_and_edit_param.history,
-            content=plan.content,
+            history=chat_and_edit_param.history if chat_and_edit_param.history else [],
+            content=plan.content if plan else "",
         ),
         media_type="application/x-ndjson",
     )
@@ -95,22 +96,21 @@ async def chat_issue_stream(chat_and_edit_param: ChatAndEdit):
     """
     Stream chat responses from IssueGenerator in JSON format (ndjson).
     """
-    plan_repo = get_plan_document_repository()
-    plan = plan_repo.get_by_id(chat_and_edit_param.project_id)
+    plan = PlanDocument.find_by_id(chat_and_edit_param.project_id)
+    tech_spec = TechSpecDocument.find_by_id(chat_and_edit_param.project_id)
 
-    tech_spec_repo = get_tech_spec_document_repository()
-    tech_spec = tech_spec_repo.get_by_id(chat_and_edit_param.project_id)
-
-    bot = IssueGenerator(plan=plan.content, tech_spec=tech_spec.content)
-    issue_repo = get_issue_repository()
-    issues = issue_repo.get_by_project_id(chat_and_edit_param.project_id)
+    bot = IssueGenerator(
+        plan=plan.content if plan else "",
+        tech_spec=tech_spec.content if tech_spec else "",
+    )
+    issues = Issue.find_by_project_id(chat_and_edit_param.project_id)
 
     return StreamingResponse(
         process_stream(
             bot,
             chat_and_edit_param.message,
-            history=chat_and_edit_param.history,
-            current_issues=issues,  # Issue オブジェクトの配列を直接渡す
+            history=chat_and_edit_param.history if chat_and_edit_param.history else [],
+            current_issues=issues,
         ),
         media_type="application/x-ndjson",
     )
@@ -121,18 +121,16 @@ async def chat_tech_spec_stream(chat_and_edit_param: ChatAndEdit):
     """
     Stream chat responses from TechSpecBot in JSON format (ndjson).
     """
-    plan_repo = get_plan_document_repository()
-    plan = plan_repo.get_by_id(chat_and_edit_param.project_id)
+    plan = PlanDocument.find_by_id(chat_and_edit_param.project_id)
 
-    bot = TechSpecBot(plan=plan)
-    tech_spec_repo = get_tech_spec_document_repository()
-    tech_spec = tech_spec_repo.get_by_id(chat_and_edit_param.project_id)
+    bot = TechSpecBot(plan=plan.content if plan else "")
+    tech_spec = TechSpecDocument.find_by_id(chat_and_edit_param.project_id)
     return StreamingResponse(
         process_stream(
             bot,
             chat_and_edit_param.message,
-            history=chat_and_edit_param.history,
-            content=tech_spec.content,
+            history=chat_and_edit_param.history if chat_and_edit_param.history else [],
+            content=tech_spec.content if tech_spec else "",
         ),
         media_type="application/x-ndjson",
     )
