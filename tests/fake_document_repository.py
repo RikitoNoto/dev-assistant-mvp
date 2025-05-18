@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 
-from src.repositories.documents import DocumentRepository
+from src.repositories.data.documents import DocumentRepository
 
 class FakeDocumentRepository(DocumentRepository):
     """インメモリでドキュメントを管理するFakeリポジトリクラス"""
