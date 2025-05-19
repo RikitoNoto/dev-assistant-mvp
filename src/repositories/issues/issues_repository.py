@@ -31,3 +31,12 @@ class IssuesRepository(ABC):
         pass
     
     
+    @abstractmethod
+    def fetch_projects(self, *args, **kwargs) -> list[dict[str, str]]:
+        """
+        プロジェクトの一覧を取得します。
+        
+        Returns:
+            list[dict[str, str]]: プロジェクトIDと名前の辞書のリスト。
+        """
+        pass

@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime
 from repositories.issues.issues_repository import IssuesRepository, IssueData
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, cast
 
 
 class GitHubIssuesRepository(IssuesRepository):
@@ -197,4 +197,46 @@ class GitHubIssuesRepository(IssuesRepository):
                 all_issues.append(issue_data)
         
         return all_issues
+    
+    def fetch_projects(self, *args, **kwargs) -> List[Dict[str, str]]:
+        """
+        ユーザーのプロジェクト一覧を取得します。
+        
+        Returns:
+            List[Dict[str, str]]: プロジェクトIDと名前の辞書のリスト。
+            各辞書は「id」と「name」のキーを持ちます。
+        """
+        query = """
+            query {
+                viewer {
+                    projectsV2(first: 100) {
+                        nodes {
+                            id
+                            title
+                            number
+                            closed
+                        }
+                    }
+                }
+            }
+        """
+        
+        result = self.__run_query(query)
+        
+        projects = []
+        try:
+            project_nodes = result.get("data", {}).get("viewer", {}).get("projectsV2", {}).get("nodes", [])
+            
+            for project in project_nodes:
+                # 閉じられていないプロジェクトのみを含める
+                if not project.get("closed", False):
+                    projects.append({
+                        "id": project["id"],
+                        "name": project["title"]
+                    })
+                    
+            return projects
+        except (KeyError, TypeError):
+            # プロジェクトが見つからない場合は空のリストを返す
+            return []
         
