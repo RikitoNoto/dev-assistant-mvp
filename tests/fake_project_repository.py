@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 
-from src.repositories.projects import ProjectRepository
+from src.repositories.data.projects import ProjectRepository
 
 class FakeProjectRepository(ProjectRepository):
     """インメモリでプロジェクトを管理するFakeリポジトリクラス"""

@@ -1,14 +1,14 @@
-from repositories.documents import (
+from repositories.data.documents import (
     PlanDocumentRepository,
     TechSpecDocumentRepository,
     DynamoDbDocumentRepository as DynamoDbDocRepo,
 )
-from repositories.projects import (
+from repositories.data.projects import (
     ProjectRepository,
     DynamoDbProjectRepository,
 )
 
-from repositories.issues import IssueRepository, DynamoDbIssueRepository
+from repositories.data.issues import IssueRepository, DynamoDbIssueRepository
 
 _project_repository_instance = None
 

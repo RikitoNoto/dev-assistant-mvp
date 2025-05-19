@@ -10,14 +10,14 @@ if TYPE_CHECKING:
     from src.api import app
     from src.models.document import PlanDocument, TechSpecDocument
     from src.models.project import Project
-    from src.repositories.projects import ProjectRepository
-    from src.repositories.documents import DocumentRepository
+    from src.repositories.data.projects import ProjectRepository
+    from src.repositories.data.documents import DocumentRepository
 else:
     from api import app
     from models.document import PlanDocument, TechSpecDocument
     from models.project import Project
-    from repositories.projects import ProjectRepository
-    from repositories.documents import DocumentRepository
+    from repositories.data.projects import ProjectRepository
+    from repositories.data.documents import DocumentRepository
 
 from tests.fake_project_repository import FakeProjectRepository
 from tests.fake_document_repository import FakeDocumentRepository

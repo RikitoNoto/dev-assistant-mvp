@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.models.document import Document
-    from src.repositories.documents import DocumentRepository
+    from src.repositories.data.documents import DocumentRepository
 else:
     from models.document import Document
-    from repositories.documents import DocumentRepository
+    from repositories.data.documents import DocumentRepository
 
 
 class TestDocument:

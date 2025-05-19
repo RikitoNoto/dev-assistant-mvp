@@ -11,12 +11,12 @@ from fastapi import status
 if TYPE_CHECKING:
     from src.api import app
     from src.models.issue import Issue
-    from src.repositories.issues import IssueRepository
+    from src.repositories.data.issues import IssueRepository
     from src.routers.utils import get_issue_repository
 else:
     from api import app
     from models.issue import Issue
-    from repositories.issues import IssueRepository
+    from repositories.data.issues import IssueRepository
     from routers.utils import get_issue_repository
 
 

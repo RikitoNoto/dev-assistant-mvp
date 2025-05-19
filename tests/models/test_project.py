@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import uuid
 
 from src.models.project import Project
-from src.repositories.projects import ProjectRepository
+from src.repositories.data.projects import ProjectRepository
 from tests.fake_project_repository import FakeProjectRepository
 
 

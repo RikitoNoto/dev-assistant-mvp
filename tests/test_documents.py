@@ -7,11 +7,11 @@ from tests.fake_document_repository import FakeDocumentRepository
 if TYPE_CHECKING:
     from src.api import app
     from src.models.document import PlanDocument, TechSpecDocument
-    from src.repositories.documents import DocumentRepository
+    from src.repositories.data.documents import DocumentRepository
 else:
     from api import app
     from models.document import PlanDocument, TechSpecDocument
-    from repositories.documents import DocumentRepository
+    from repositories.data.documents import DocumentRepository
 
 
 # --- テストクラス ---

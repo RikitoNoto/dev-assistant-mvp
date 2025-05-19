@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, ClassVar, Self, Dict, Any
 from pydantic import BaseModel
-from repositories.documents import DocumentRepository
+from repositories.data.documents import DocumentRepository
 from routers.utils import (
     get_plan_document_repository,
     get_tech_spec_document_repository,

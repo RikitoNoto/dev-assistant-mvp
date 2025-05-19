@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from pydantic import BaseModel
 from routers.utils import get_issue_repository
-from repositories.issues import IssueRepository
+from repositories.data.issues import IssueRepository
 from typing import Optional, ClassVar, Self, List, Dict, Any
 from uuid import uuid4
 

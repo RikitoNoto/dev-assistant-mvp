@@ -7,10 +7,10 @@ from unittest.mock import patch, MagicMock
 
 if TYPE_CHECKING:
     from src.models.issue import Issue
-    from src.repositories.issues import IssueRepository
+    from src.repositories.data.issues import IssueRepository
 else:
     from models.issue import Issue
-    from repositories.issues import IssueRepository
+    from repositories.data.issues import IssueRepository
 
 
 class TestIssue:
