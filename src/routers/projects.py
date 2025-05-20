@@ -24,6 +24,15 @@ class ProjectOpenUpdate(BaseModel):
     pass  # No fields needed, just updating last_opened_at
 
 
+class GitHubProjectRegister(BaseModel):
+    github_project_id: str
+
+
+class GitHubProject(BaseModel):
+    id: str
+    name: str
+
+
 @router.post("", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_data: ProjectCreate,
@@ -186,9 +195,41 @@ def delete_project(
         )
 
 
-class GitHubProject(BaseModel):
-    id: str
-    name: str
+@router.post("/{project_id}/github", response_model=Project)
+def register_github_project(
+    project_id: str,
+    github_project_data: GitHubProjectRegister,
+):
+    """
+    プロジェクトにGitHubプロジェクトIDを登録します。
+    
+    Args:
+        project_id: 登録対象のプロジェクトID
+        github_project_data: GitHubプロジェクトIDを含むデータ
+        
+    Returns:
+        Project: 更新されたプロジェクト
+    """
+    try:
+        # プロジェクトの存在確認
+        existing_project = Project.find_by_id(project_id)
+        if existing_project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found.",
+            )
+            
+        # GitHubプロジェクトIDを登録
+        updated_project = existing_project.update(github_project_id=github_project_data.github_project_id)
+        
+        return updated_project
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to register GitHub project: {str(e)}",
+        )
 
 
 def get_github_repository():

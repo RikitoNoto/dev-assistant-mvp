@@ -2,7 +2,7 @@ import time
 from datetime import datetime
 from fastapi import status
 from fastapi.testclient import TestClient
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from unittest.mock import MagicMock
 
 
@@ -50,9 +50,9 @@ class TestProjectAPI:
         # 次のテストでsetup_methodが呼ばれるので、ここでリポジトリを再設定する必要はない
 
     # --- Helper Methods ---
-    def _create_project_in_repo(self, title: str, create_docs: bool = False) -> Project:
+    def _create_project_in_repo(self, title: str, create_docs: bool = False, github_project_id: Optional[str] = None) -> Project:
         """テスト用にリポジトリに直接プロジェクトを作成するヘルパー"""
-        project = Project(title=title)
+        project = Project(title=title, github_project_id=github_project_id)
         saved_project_id = self.fake_project_repo.save_or_update(project.to_dict())
         saved_project_data = self.fake_project_repo.get_by_id(saved_project_id)
         if not saved_project_data:
@@ -435,4 +435,68 @@ class TestProjectAPI:
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         data = response.json()
         assert "detail" in data
-        assert "Failed to update project last_opened_at: Database error on update last_opened_at" in data["detail"]
+        assert "Failed to update project last_opened_at" in data["detail"]
+    
+    # POST /projects/{project_id}/github
+    def test_register_github_project_success(self):
+        """POST /projects/{project_id}/github (成功時) のテスト"""
+        # プロジェクトを作成
+        proj = self._create_project_in_repo("Test GitHub Project Registration", create_docs=True)
+        github_project_id = "gp_12345"
+        
+        # APIエンドポイントを呼び出し
+        response = self.client.post(
+            f"/projects/{proj.project_id}/github",
+            json={"github_project_id": github_project_id}
+        )
+        
+        # レスポンスを検証
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["project_id"] == str(proj.project_id)
+        assert data["title"] == proj.title
+        assert data["github_project_id"] == github_project_id
+        
+        # リポジトリに保存されたデータを検証
+        saved_project_data = self.fake_project_repo.get_by_id(proj.project_id)
+        assert saved_project_data is not None
+        assert saved_project_data["github_project_id"] == github_project_id
+    
+    def test_register_github_project_not_found(self):
+        """POST /projects/{project_id}/github (存在しないID) のテスト"""
+        non_existent_id = "non_existent_id"
+        github_project_id = "gp_12345"
+        
+        response = self.client.post(
+            f"/projects/{non_existent_id}/github",
+            json={"github_project_id": github_project_id}
+        )
+        
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
+        assert "detail" in data
+        assert f"Project with ID '{non_existent_id}' not found" in data["detail"]
+    
+    def test_register_github_project_failure(self):
+        """POST /projects/{project_id}/github (リポジトリ失敗時) のテスト"""
+        # プロジェクトを作成
+        proj = self._create_project_in_repo("Project To Fail GitHub Registration", create_docs=True)
+        github_project_id = "gp_12345"
+        
+        # モックリポジトリを設定
+        mock_project_repo = MagicMock(spec=ProjectRepository)
+        mock_project_repo.get_by_id.return_value = proj.to_dict()
+        mock_project_repo.save_or_update.side_effect = Exception(
+            "Database error on update github_project_id"
+        )
+        Project.set_repository(mock_project_repo)
+        
+        response = self.client.post(
+            f"/projects/{proj.project_id}/github",
+            json={"github_project_id": github_project_id}
+        )
+        
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "detail" in data
+        assert "Failed to register GitHub project: Database error on update github_project_id" in data["detail"]
