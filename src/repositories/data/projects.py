@@ -147,17 +147,11 @@ class DynamoDbProjectRepository(ProjectRepository):
             Exception: DynamoDBへの書き込み中にエラーが発生した場合。
         """
         self._ensure_table_initialized()
-        project_data["updated_at"] = datetime.now().isoformat()
         try:
-            item_to_save = {
-                "project_id": str(project_data["project_id"]),
-                "title": project_data["title"],
-                "created_at": project_data["created_at"] if isinstance(project_data["created_at"], str) else project_data["created_at"].isoformat(),
-                "updated_at": project_data["updated_at"] if isinstance(project_data["updated_at"], str) else project_data["updated_at"].isoformat(),
-            }
-            if "last_opened_at" in project_data:
-                item_to_save["last_opened_at"] = project_data["last_opened_at"] if isinstance(project_data["last_opened_at"], str) else project_data["last_opened_at"].isoformat()
-            self._table.put_item(Item=item_to_save)
+            for key, value in project_data.items():
+                if isinstance(value, datetime):
+                    project_data[key] = value.isoformat()
+            self._table.put_item(Item=project_data)
             return project_data["project_id"]
         except ClientError as e:
             print(f"Error saving/updating project (ID: {project_data['project_id']}): {e}")
@@ -183,13 +177,7 @@ class DynamoDbProjectRepository(ProjectRepository):
             response = self._table.get_item(Key={"project_id": project_id})
             item = response.get("Item")
             if item:
-                return {
-                    "project_id": item["project_id"],
-                    "title": item["title"],
-                    "created_at": item["created_at"],
-                    "updated_at": item["updated_at"],
-                    "last_opened_at": item.get("last_opened_at", item["created_at"])
-                }
+                return item
             else:
                 return None
         except ClientError as e:
@@ -218,14 +206,7 @@ class DynamoDbProjectRepository(ProjectRepository):
             projects = []
             for item in items:
                 try:
-                    project_data = {
-                        "project_id": item["project_id"],
-                        "title": item["title"],
-                        "created_at": item["created_at"],
-                        "updated_at": item["updated_at"],
-                        "last_opened_at": item.get("last_opened_at", item["created_at"])
-                    }
-                    projects.append(project_data)
+                    projects.append(item)
                 except KeyError as e:
                     print(f"Error parsing project data: {e}")
                     continue
@@ -236,14 +217,7 @@ class DynamoDbProjectRepository(ProjectRepository):
                 items = response.get("Items", [])
                 for item in items:
                     try:
-                        project_data = {
-                            "project_id": item["project_id"],
-                            "title": item["title"],
-                            "created_at": item["created_at"],
-                            "updated_at": item["updated_at"],
-                            "last_opened_at": item.get("last_opened_at", item["created_at"])
-                        }
-                        projects.append(project_data)
+                        projects.append(item)
                     except KeyError as e:
                         print(f"Error parsing project data: {e}")
                         continue

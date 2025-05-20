@@ -1,10 +1,12 @@
+import os
+
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
-from typing import List
-
-from pydantic import BaseModel
 from models.document import PlanDocument, TechSpecDocument
 from models.project import Project
+from pydantic import BaseModel
+from repositories.issues.github import GitHubIssuesRepository
+from typing import List
 
 
 router = APIRouter()
@@ -181,5 +183,45 @@ def delete_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete project: {str(e)}",
+        )
+
+
+class GitHubProject(BaseModel):
+    id: str
+    name: str
+
+
+def get_github_repository():
+    """
+    GitHub APIを使用するためのリポジトリインスタンスを取得します。
+    
+    Returns:
+        GitHubIssuesRepository: GitHub APIリポジトリのインスタンス
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub token is not configured. Please set the GITHUB_TOKEN environment variable.",
+        )
+    return GitHubIssuesRepository(token=github_token)
+
+
+@router.get("/github/projects", response_model=List[GitHubProject])
+def get_github_projects():
+    """
+    GitHubと連携しているプロジェクト一覧を取得します。
+    
+    Returns:
+        List[GitHubProject]: GitHubプロジェクトのリスト
+    """
+    try:
+        github_repo = get_github_repository()
+        projects = github_repo.fetch_projects()
+        return projects
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch GitHub projects: {str(e)}",
         )
         
