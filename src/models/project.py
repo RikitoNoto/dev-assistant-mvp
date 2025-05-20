@@ -29,6 +29,7 @@ class Project(BaseModel):
 
     project_id: str
     title: str
+    github_project_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     last_opened_at: datetime
@@ -65,6 +66,7 @@ class Project(BaseModel):
         return {
             "project_id": self.project_id,
             "title": self.title,
+            "github_project_id": self.github_project_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_opened_at": self.last_opened_at
@@ -97,6 +99,7 @@ class Project(BaseModel):
         return cls(
             project_id=data["project_id"],
             title=data["title"],
+            github_project_id=data.get("github_project_id"),
             created_at=created_at,
             updated_at=updated_at,
             last_opened_at=last_opened_at
