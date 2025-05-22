@@ -1,7 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Path, Query
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status, Path, Query, Depends
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from models.issue import Issue
+import os
+from datetime import datetime
+from repositories.issues.github import GitHubIssuesRepository
+from repositories.issues.issues_repository import IssueData
 
 router = APIRouter()
 
@@ -37,6 +41,117 @@ def create_issue(issue_data: IssueCreate):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create issue: {str(e)}",
+        )
+
+
+def get_github_repository() -> GitHubIssuesRepository:
+    """
+    GitHub APIを使用するためのリポジトリインスタンスを取得します。
+    
+    Returns:
+        GitHubIssuesRepository: GitHub APIリポジトリのインスタンス
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub token is not configured. Please set the GITHUB_TOKEN environment variable.",
+        )
+    return GitHubIssuesRepository(token=github_token)
+
+
+class GitHubIssueFilter(BaseModel):
+    state: Optional[str] = None
+    labels: Optional[List[str]] = None
+    limit_per_repo: Optional[int] = 100
+
+
+class GitHubIssueResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    url: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    labels: List[str] = []
+
+
+@router.get("/github/{project_id}", response_model=List[GitHubIssueResponse])
+def get_github_issues(
+    project_id: str = Path(..., description="The ID of the local project"),
+    state: Optional[str] = Query(None, description="Filter issues by state (OPEN, CLOSED)"),
+    labels: Optional[str] = Query(None, description="Filter issues by labels (comma-separated)"),
+    limit_per_repo: int = Query(100, description="Maximum number of issues to fetch per repository")
+):
+    """
+    プロジェクトに紐づけられたGitHubプロジェクトからIssueを取得します。
+    
+    Args:
+        project_id: ローカルプロジェクトID
+        state: Issueの状態でフィルタリング（OPEN、CLOSED）
+        labels: Issueのラベルでフィルタリング（カンマ区切り）
+        limit_per_repo: リポジトリごとに取得するIssueの最大数
+        
+    Returns:
+        List[GitHubIssueResponse]: GitHubのIssueリスト
+    """
+    try:
+        # プロジェクトモデルをインポート
+        from models.project import Project
+        
+        # プロジェクトを取得
+        project = Project.find_by_id(project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found."
+            )
+        
+        # GitHubプロジェクトIDが設定されているか確認
+        if not project.github_project_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project with ID '{project_id}' is not linked to a GitHub project."
+            )
+        
+        # GitHubリポジトリインスタンスを取得
+        github_repo = get_github_repository()
+        
+        # ラベルの処理（カンマ区切りの文字列をリストに変換）
+        label_list = None
+        if labels:
+            label_list = [label.strip() for label in labels.split(',')]
+        
+        # GitHubからIssueを取得（プロジェクトのGitHubプロジェクトIDを使用）
+        issues = github_repo.fetch_issues(
+            project_id=project.github_project_id,
+            state=state,
+            labels=label_list,
+            limit_per_repo=limit_per_repo
+        )
+        
+        # IssueDataオブジェクトをレスポンスモデルに変換
+        response_issues = []
+        for issue in issues:
+            response_issues.append(GitHubIssueResponse(
+                id=issue.id,
+                title=issue.title,
+                description=issue.description,
+                url=issue.url,
+                status=issue.status,
+                created_at=issue.created_at,
+                updated_at=issue.updated_at,
+                labels=issue.labels
+            ))
+        
+        return response_issues
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch GitHub issues: {str(e)}",
         )
 
 

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -13,6 +13,7 @@ class IssueData:
     status: str
     created_at: datetime
     updated_at: datetime
+    labels: List[str] = field(default_factory=list)
     
 
 class IssuesRepository(ABC):
