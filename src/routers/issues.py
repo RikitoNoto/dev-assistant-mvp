@@ -77,7 +77,7 @@ class GitHubIssueResponse(BaseModel):
     labels: List[str] = []
 
 
-@router.get("/github/{project_id}", response_model=List[GitHubIssueResponse])
+@router.get("/{project_id}/github", response_model=List[GitHubIssueResponse])
 def get_github_issues(
     project_id: str = Path(..., description="The ID of the local project"),
     state: Optional[str] = Query(None, description="Filter issues by state (OPEN, CLOSED)"),
