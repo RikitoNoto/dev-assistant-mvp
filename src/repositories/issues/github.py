@@ -115,23 +115,37 @@ class GitHubIssuesRepository(IssuesRepository):
         
         return repositories
     
-    def __fetch_repository_issues(self, owner: str, name: str, limit: int = 100) -> List[Dict[str, Any]]:
+    def __fetch_repository_issues(self, owner: str, name: str, state: Optional[str] = None, 
+                           labels: Optional[List[str]] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         特定のリポジトリからIssueを取得します。
         
         Args:
             owner: リポジトリのオーナー名。
             name: リポジトリ名。
+            state: Issueの状態でフィルタリング（'OPEN'、'CLOSED'、None=全て）。
+            labels: フィルタリングするラベルのリスト。
             limit: 取得するIssueの最大数。
             
         Returns:
             List[Dict[str, Any]]: 取得したIssueのリスト。
         """
-        query = """
-            query getRepositoryIssues($owner: String!, $name: String!, $first: Int) {
-                repository(owner: $owner, name: $name) {
-                    issues(first: $first) {
-                        nodes {
+        # GraphQLのフィルタ引数を構築
+        filter_args = "first: $first"
+        if state:
+            filter_args += ", states: [$state]"
+        
+        # ラベルフィルタの追加
+        labels_filter = ""
+        if labels and len(labels) > 0:
+            labels_filter = ", labels: $labels"
+            filter_args += labels_filter
+        
+        query = f"""
+            query getRepositoryIssues($owner: String!, $name: String!, $first: Int{', $state: IssueState' if state else ''}{', $labels: [String!]' if labels and len(labels) > 0 else ''}) {{
+                repository(owner: $owner, name: $name) {{
+                    issues({filter_args}) {{
+                        nodes {{
                             id
                             title
                             body
@@ -139,28 +153,49 @@ class GitHubIssuesRepository(IssuesRepository):
                             url
                             createdAt
                             updatedAt
-                            repository {
+                            labels(first: 10) {{
+                                nodes {{
+                                    name
+                                    color
+                                }}
+                            }}
+                            repository {{
                                 name
-                                owner {
+                                owner {{
                                     login
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                                }}
+                            }}
+                        }}
+                        pageInfo {{
+                            hasNextPage
+                            endCursor
+                        }}
+                        totalCount
+                    }}
+                }}
+            }}
         """
+        
         variables = {
             "owner": owner,
             "name": name,
             "first": limit,
         }
+        
+        if state:
+            variables["state"] = state
+        
+        if labels and len(labels) > 0:
+            variables["labels"] = labels
+        
         result = self.__run_query(query, variables)
         
         try:
             issues = result["data"]["repository"]["issues"]["nodes"]
             return issues
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as e:
+            # エラーログを出力
+            print(f"Error fetching issues for {owner}/{name}: {str(e)}")
             # リポジトリやIssueが見つからない場合は空のリストを返す
             return []
     
@@ -171,30 +206,69 @@ class GitHubIssuesRepository(IssuesRepository):
         
         Args:
             project_id: 取得するIssueのプロジェクトID。
+            state: (オプション) Issueの状態でフィルタリング（'OPEN'、'CLOSED'、None=全て）。
+            labels: (オプション) フィルタリングするラベルのリスト。
+            limit_per_repo: (オプション) リポジトリごとに取得するIssueの最大数。デフォルトは100。
             
         Returns:
             List[IssueData]: 取得したIssueのリスト。
+        
+        Examples:
+            >>> repository = GitHubIssuesRepository(token)
+            >>> # すべてのIssueを取得
+            >>> all_issues = repository.fetch_issues(project_id)
+            >>> # オープン状態のIssueのみ取得
+            >>> open_issues = repository.fetch_issues(project_id, state='OPEN')
+            >>> # 特定のラベルを持つIssueを取得
+            >>> bug_issues = repository.fetch_issues(project_id, labels=['bug'])
+            >>> # 複数の条件でフィルタリング
+            >>> filtered_issues = repository.fetch_issues(project_id, state='OPEN', labels=['enhancement'], limit_per_repo=50)
         """
+        # オプションパラメータの取得
+        state = kwargs.get('state')
+        labels = kwargs.get('labels')
+        limit_per_repo = kwargs.get('limit_per_repo', 100)
+        
         # プロジェクト内のリポジトリを取得
         repositories = self.__get_project_repositories(project_id)
+        
+        if not repositories:
+            print(f"No repositories found for project ID: {project_id}")
+            return []
         
         # 全リポジトリからIssueを収集
         all_issues = []
         for repo in repositories:
-            issues = self.__fetch_repository_issues(repo["owner"], repo["name"])
-            
-            # 辞書形式のIssueをIssueDataオブジェクトに変換
-            for issue in issues:
-                issue_data = IssueData(
-                    id=issue["id"],
-                    title=issue["title"],
-                    description=issue["body"],
-                    url=issue["url"],
-                    status=issue["state"],
-                    created_at=datetime.fromisoformat(issue.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
-                    updated_at=datetime.fromisoformat(issue.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00'))
+            try:
+                issues = self.__fetch_repository_issues(
+                    owner=repo["owner"], 
+                    name=repo["name"],
+                    state=state,
+                    labels=labels,
+                    limit=limit_per_repo
                 )
-                all_issues.append(issue_data)
+                
+                # 辞書形式のIssueをIssueDataオブジェクトに変換
+                for issue in issues:
+                    # ラベル情報の抽出
+                    issue_labels = []
+                    if issue.get("labels") and issue["labels"].get("nodes"):
+                        issue_labels = [label["name"] for label in issue["labels"]["nodes"]]
+                    
+                    issue_data = IssueData(
+                        id=issue["id"],
+                        title=issue["title"],
+                        description=issue["body"] or "",  # Noneの場合は空文字列に
+                        url=issue["url"],
+                        status=issue["state"],
+                        created_at=datetime.fromisoformat(issue.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                        updated_at=datetime.fromisoformat(issue.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                        labels=issue_labels
+                    )
+                    all_issues.append(issue_data)
+            except Exception as e:
+                print(f"Error fetching issues from {repo['owner']}/{repo['name']}: {str(e)}")
+                continue
         
         return all_issues
     
