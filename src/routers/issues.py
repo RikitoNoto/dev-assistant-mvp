@@ -385,7 +385,7 @@ def create_github_issue(
         )
 
 
-@router.patch("/{project_id}/github/{issue_id}", response_model=GitHubIssueResponse)
+@router.put("/{project_id}/github/{issue_id}", response_model=GitHubIssueResponse)
 def update_github_issue(
     issue_data: GitHubIssueUpdate,
     project_id: str = Path(..., description="The ID of the local project"),
@@ -462,4 +462,61 @@ def update_github_issue(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update GitHub issue: {str(e)}",
+        )
+
+
+@router.delete("/{project_id}/github/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_github_issue(
+    project_id: str = Path(..., description="The ID of the local project"),
+    issue_id: str = Path(..., description="The ID of the GitHub issue"),
+):
+    """
+    GitHubのIssueを削除します。
+    
+    Args:
+        project_id: ローカルプロジェクトID
+        issue_id: 削除するGitHub IssueのID
+        
+    Returns:
+        None: 削除が成功した場合は204 No Contentを返します
+    """
+    try:
+        # プロジェクトモデルをインポート
+        from models.project import Project
+        
+        # プロジェクトを取得
+        project = Project.find_by_id(project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found."
+            )
+        
+        # GitHubプロジェクトIDが設定されているか確認
+        if not project.github_project_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project with ID '{project_id}' is not linked to a GitHub project."
+            )
+        
+        # GitHubリポジトリインスタンスを取得
+        github_repo = get_github_repository()
+        
+        # GitHub Issueを削除
+        success = github_repo.delete_issue(issue_id=issue_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"GitHub Issue with ID '{issue_id}' not found or could not be deleted."
+            )
+        
+        # 削除成功の場合は204 No Contentを返す
+        return None
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete GitHub issue: {str(e)}",
         )
