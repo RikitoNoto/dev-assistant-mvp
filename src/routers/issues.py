@@ -275,6 +275,7 @@ class GitHubIssueUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    project_status: Optional[str] = None
 
 
 @router.patch("/{project_id}/github/{issue_id}", response_model=GitHubIssueResponse)
@@ -321,7 +322,8 @@ def update_github_issue(
             issue_id=issue_id,
             title=issue_data.title,
             description=issue_data.description,
-            status=issue_data.status
+            status=issue_data.status,
+            project_status=issue_data.project_status
         )
         
         if not updated_issue:
