@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime
 from repositories.issues.issues_repository import IssuesRepository, IssueData
-from typing import Any, List, Dict, Optional, cast
+from typing import Any, List, Dict, Optional, cast, Tuple
 
 
 class GitHubIssuesRepository(IssuesRepository):
@@ -301,6 +301,18 @@ class GitHubIssuesRepository(IssuesRepository):
         
         return all_issues
     
+    def get_project_repositories(self, project_id: str) -> List[Dict[str, str]]:
+        """
+        プロジェクトに関連するリポジトリを取得します。
+        
+        Args:
+            project_id: プロジェクトID。
+            
+        Returns:
+            List[Dict[str, str]]: リポジトリ情報のリスト。各リポジトリは「owner」と「name」のキーを持ちます。
+        """
+        return self.__get_project_repositories(project_id)
+    
     def fetch_projects(self, *args, **kwargs) -> List[Dict[str, str]]:
         """
         ユーザーのプロジェクト一覧を取得します。
@@ -343,6 +355,168 @@ class GitHubIssuesRepository(IssuesRepository):
             # プロジェクトが見つからない場合は空のリストを返す
             return []
             
+    def create_issue(self, repository_owner: str, repository_name: str, title: str, description: str, labels: Optional[List[str]] = None) -> Optional[IssueData]:
+        """
+        GitHubに新しいIssueを作成します。
+        
+        Args:
+            repository_owner: リポジトリのオーナー名
+            repository_name: リポジトリ名
+            title: Issueのタイトル
+            description: Issueの説明
+            labels: 適用するラベルのリスト（オプション）
+            
+        Returns:
+            Optional[IssueData]: 作成されたIssueのデータ。作成に失敗した場合はNone。
+        """
+        # GraphQLミューテーションを構築
+        query = """
+            mutation CreateIssue($repositoryId: ID!, $title: String!, $body: String!, $labelIds: [ID!]) {
+                createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body, labelIds: $labelIds}) {
+                    issue {
+                        id
+                        title
+                        body
+                        state
+                        url
+                        createdAt
+                        updatedAt
+                        labels(first: 10) {
+                            nodes {
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        """
+        
+        # まずリポジトリIDを取得する必要がある
+        repository_id = self.__get_repository_id(repository_owner, repository_name)
+        if not repository_id:
+            raise ValueError(f"Repository {repository_owner}/{repository_name} not found")
+        
+        # ラベルIDを取得（指定されている場合）
+        label_ids = None
+        if labels and len(labels) > 0:
+            label_ids = self.__get_label_ids(repository_owner, repository_name, labels)
+        
+        # ミューテーションを実行
+        variables = {
+            "repositoryId": repository_id,
+            "title": title,
+            "body": description,
+            "labelIds": label_ids
+        }
+        
+        try:
+            result = self.__run_query(query, variables)
+            issue_data = result.get("data", {}).get("createIssue", {}).get("issue")
+            
+            if not issue_data:
+                return None
+                
+            # ラベル情報の抽出
+            issue_labels = []
+            if issue_data.get("labels") and issue_data["labels"].get("nodes"):
+                issue_labels = [label["name"] for label in issue_data["labels"]["nodes"]]
+                
+            # IssueDataオブジェクトに変換して返す
+            return IssueData(
+                id=issue_data["id"],
+                title=issue_data["title"],
+                description=issue_data["body"] or "",
+                url=issue_data["url"],
+                status=issue_data["state"],
+                created_at=datetime.fromisoformat(issue_data.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                updated_at=datetime.fromisoformat(issue_data.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                labels=issue_labels,
+                project_status=None
+            )
+        except Exception as e:
+            print(f"Error creating issue: {str(e)}")
+            raise
+    
+    def __get_repository_id(self, owner: str, name: str) -> Optional[str]:
+        """
+        リポジトリIDを取得します。
+        
+        Args:
+            owner: リポジトリのオーナー名
+            name: リポジトリ名
+            
+        Returns:
+            Optional[str]: リポジトリID。見つからない場合はNone。
+        """
+        query = """
+            query GetRepositoryId($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                    id
+                }
+            }
+        """
+        
+        variables = {
+            "owner": owner,
+            "name": name
+        }
+        
+        try:
+            result = self.__run_query(query, variables)
+            return result.get("data", {}).get("repository", {}).get("id")
+        except Exception as e:
+            print(f"Error getting repository ID: {str(e)}")
+            return None
+    
+    def __get_label_ids(self, owner: str, name: str, label_names: List[str]) -> List[str]:
+        """
+        ラベル名からラベルIDのリストを取得します。
+        
+        Args:
+            owner: リポジトリのオーナー名
+            name: リポジトリ名
+            label_names: ラベル名のリスト
+            
+        Returns:
+            List[str]: ラベルIDのリスト。存在しないラベルは無視されます。
+        """
+        query = """
+            query GetLabelIds($owner: String!, $name: String!, $labels: [String!]!) {
+                repository(owner: $owner, name: $name) {
+                    labels(first: 100, query: $labelQuery) {
+                        nodes {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        """
+        
+        # 各ラベルに対して個別にクエリを実行し、結果を結合する
+        label_ids = []
+        for label_name in label_names:
+            variables = {
+                "owner": owner,
+                "name": name,
+                "labelQuery": label_name
+            }
+            
+            try:
+                result = self.__run_query(query.replace("$labels: [String!]!", "$labelQuery: String!"), variables)
+                labels = result.get("data", {}).get("repository", {}).get("labels", {}).get("nodes", [])
+                
+                # 完全一致するラベルのみを追加
+                for label in labels:
+                    if label.get("name") == label_name:
+                        label_ids.append(label.get("id"))
+                        break
+            except Exception as e:
+                print(f"Error getting label ID for {label_name}: {str(e)}")
+                continue
+                
+        return label_ids
+        
     def update_issue(self, issue_id: str, title: Optional[str] = None, description: Optional[str] = None, status: Optional[str] = None, project_status: Optional[str] = None) -> Optional[IssueData]:
         """
         GitHubのIssueを更新します。

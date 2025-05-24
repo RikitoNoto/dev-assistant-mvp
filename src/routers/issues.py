@@ -271,11 +271,108 @@ def delete_issue(
         )
 
 
+class GitHubIssueCreate(BaseModel):
+    title: str
+    description: str
+    labels: Optional[List[str]] = None
+
+
 class GitHubIssueUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
     project_status: Optional[str] = None
+
+
+@router.post("/{project_id}/github", response_model=GitHubIssueResponse, status_code=status.HTTP_201_CREATED)
+def create_github_issue(
+    issue_data: GitHubIssueCreate,
+    project_id: str = Path(..., description="The ID of the local project")
+):
+    """
+    GitHubに新しいIssueを作成します。
+    
+    Args:
+        project_id: ローカルプロジェクトID
+        issue_data: 作成するIssueのデータ（リポジトリ情報、タイトル、説明、ラベル）
+        
+    Returns:
+        GitHubIssueResponse: 作成されたGitHub Issueの情報
+    """
+    try:
+        # プロジェクトモデルをインポート
+        from models.project import Project
+        
+        # プロジェクトを取得
+        project = Project.find_by_id(project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found."
+            )
+        
+        # GitHubプロジェクトIDが設定されているか確認
+        if not project.github_project_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project with ID '{project_id}' is not linked to a GitHub project."
+            )
+        
+        # GitHubリポジトリインスタンスを取得
+        github_repo = get_github_repository()
+        
+        # プロジェクトに紐づくリポジトリを取得
+        repositories = github_repo.get_project_repositories(project.github_project_id)
+        
+        if not repositories:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No repositories found for project with ID '{project_id}'."
+            )
+        
+        # 最初のリポジトリを使用してIssueを作成
+        #TODO: 複数のリポジトリに対応する
+        repository = repositories[0]
+        
+        # GitHub Issueを作成
+        created_issue = github_repo.create_issue(
+            repository_owner=repository["owner"],
+            repository_name=repository["name"],
+            title=issue_data.title,
+            description=issue_data.description,
+            labels=issue_data.labels
+        )
+        
+        if not created_issue:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create GitHub issue."
+            )
+        
+        # レスポンスモデルに変換して返す
+        return GitHubIssueResponse(
+            id=created_issue.id,
+            title=created_issue.title,
+            description=created_issue.description,
+            url=created_issue.url,
+            status=created_issue.status,
+            created_at=created_issue.created_at,
+            updated_at=created_issue.updated_at,
+            labels=created_issue.labels,
+            project_status=created_issue.project_status
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create GitHub issue: {str(e)}",
+        )
 
 
 @router.patch("/{project_id}/github/{issue_id}", response_model=GitHubIssueResponse)
