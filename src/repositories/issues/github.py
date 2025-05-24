@@ -799,3 +799,33 @@ class GitHubIssuesRepository(IssuesRepository):
             labels=issue_labels,
             project_status=updated_project_status
         )
+    
+    def delete_issue(self, issue_id: str) -> bool:
+        """
+        GitHubのIssueを削除します。
+        
+        Args:
+            issue_id: 削除するIssueのID
+            
+        Returns:
+            bool: 削除が成功した場合はTrue、失敗した場合はFalse
+        """
+        # GraphQLミューテーションを構築
+        query = """
+            mutation DeleteIssue($issueId: ID!) {
+                deleteIssue(input: {issueId: $issueId}) {
+                    clientMutationId
+                }
+            }
+        """
+        
+        variables = {
+            "issueId": issue_id
+        }
+        
+        try:
+            result = self.__run_query(query, variables)
+            return result.get("data", {}).get("deleteIssue") is not None
+        except Exception as e:
+            print(f"Error deleting issue: {str(e)}")
+            return False
