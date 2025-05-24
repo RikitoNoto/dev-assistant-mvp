@@ -468,6 +468,40 @@ class GitHubIssuesRepository(IssuesRepository):
             print(f"Error getting repository ID: {str(e)}")
             return None
     
+    def add_issue_to_project(self, project_id: str, issue_id: str) -> bool:
+        """
+        GitHub Issueをプロジェクトに追加します。
+        
+        Args:
+            project_id: GitHubプロジェクトID
+            issue_id: 追加するIssueのID
+            
+        Returns:
+            bool: 追加が成功した場合はTrue、失敗した場合はFalse
+        """
+        query = """
+            mutation AddProjectV2ItemById($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                    item {
+                        id
+                    }
+                }
+            }
+        """
+        
+        variables = {
+            "projectId": project_id,
+            "contentId": issue_id
+        }
+        
+        try:
+            result = self.__run_query(query, variables)
+            item = result.get("data", {}).get("addProjectV2ItemById", {}).get("item")
+            return item is not None
+        except Exception as e:
+            print(f"Error adding issue to project: {str(e)}")
+            return False
+    
     def __get_label_ids(self, owner: str, name: str, label_names: List[str]) -> List[str]:
         """
         ラベル名からラベルIDのリストを取得します。

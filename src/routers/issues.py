@@ -348,6 +348,16 @@ def create_github_issue(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create GitHub issue."
             )
+            
+        # 作成したIssueをGitHub Projectsに追加
+        added_to_project = github_repo.add_issue_to_project(
+            project_id=project.github_project_id,
+            issue_id=created_issue.id
+        )
+        
+        if not added_to_project:
+            # プロジェクトへの追加に失敗しても、Issue自体は作成されているので警告ログを出力
+            print(f"Warning: Issue created but failed to add to project {project.github_project_id}")
         
         # レスポンスモデルに変換して返す
         return GitHubIssueResponse(
