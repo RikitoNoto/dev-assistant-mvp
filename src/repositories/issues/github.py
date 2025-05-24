@@ -342,4 +342,252 @@ class GitHubIssuesRepository(IssuesRepository):
         except (KeyError, TypeError):
             # プロジェクトが見つからない場合は空のリストを返す
             return []
+            
+    def update_issue(self, issue_id: str, title: Optional[str] = None, description: Optional[str] = None, status: Optional[str] = None, project_status: Optional[str] = None) -> Optional[IssueData]:
+        """
+        GitHubのIssueを更新します。
         
+        Args:
+            issue_id: 更新するIssueのID
+            title: 新しいタイトル（指定しない場合は変更なし）
+            description: 新しい説明（指定しない場合は変更なし）
+            status: 新しいステータス（'OPEN'または'CLOSED'、指定しない場合は変更なし）
+            project_status: 新しいプロジェクトステータス（指定しない場合は変更なし）
+        
+        Returns:
+            Optional[IssueData]: 更新されたIssueのデータ。更新に失敗した場合はNone。
+        """
+        # 更新するフィールドを準備
+        update_fields = []
+        variables = {"issueId": issue_id}
+        issue_data = None
+        updated_project_status = None
+        
+        # プロジェクトステータスのみが提供された場合は、まずIssueデータを取得する必要がある
+        if title is None and description is None and status is None and project_status is not None:
+            query = """
+                query GetIssue($issueId: ID!) {
+                    node(id: $issueId) {
+                        ... on Issue {
+                            id
+                            title
+                            body
+                            state
+                            url
+                            createdAt
+                            updatedAt
+                            labels(first: 10) {
+                                nodes {
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+            """
+            result = self.__run_query(query, variables)
+            if result.get("data") and result["data"].get("node"):
+                issue_data = result["data"]["node"]
+        
+        if title is not None:
+            update_fields.append("title: $title")
+            variables["title"] = title
+            
+        if description is not None:
+            update_fields.append("body: $body")
+            variables["body"] = description
+            
+        if status is not None:
+            # ステータスはOPENまたはCLOSEDのみ受け付ける
+            if status.upper() not in ["OPEN", "CLOSED"]:
+                raise ValueError(f"Invalid status: {status}. Status must be 'OPEN' or 'CLOSED'.")
+                
+            # GitHubのIssueはOPENまたはCLOSEDのみなので、statusに応じてmutationを選択
+            if status.upper() == "CLOSED":
+                query = """
+                    mutation CloseIssue($issueId: ID!) {
+                        closeIssue(input: {issueId: $issueId}) {
+                            issue {
+                                id
+                                title
+                                body
+                                state
+                                url
+                                createdAt
+                                updatedAt
+                                labels(first: 10) {
+                                    nodes {
+                                        name
+                                    }
+                                }
+                            }
+                        }
+                    }
+                """
+                result = self.__run_query(query, variables)
+                issue_data = result.get("data", {}).get("closeIssue", {}).get("issue")
+            else:  # OPEN
+                query = """
+                    mutation ReopenIssue($issueId: ID!) {
+                        reopenIssue(input: {issueId: $issueId}) {
+                            issue {
+                                id
+                                title
+                                body
+                                state
+                                url
+                                createdAt
+                                updatedAt
+                                labels(first: 10) {
+                                    nodes {
+                                        name
+                                    }
+                                }
+                            }
+                        }
+                    }
+                """
+                result = self.__run_query(query, variables)
+                issue_data = result.get("data", {}).get("reopenIssue", {}).get("issue")
+        
+        # タイトルまたは説明の更新が必要な場合
+        if title is not None or description is not None:
+            update_mutation = ", ".join(update_fields)
+            query = f"""
+                mutation UpdateIssue($issueId: ID!{', $title: String' if title is not None else ''}{', $body: String' if description is not None else ''}) {{
+                    updateIssue(input: {{id: $issueId, {update_mutation}}}) {{
+                        issue {{
+                            id
+                            title
+                            body
+                            state
+                            url
+                            createdAt
+                            updatedAt
+                            labels(first: 10) {{
+                                nodes {{
+                                    name
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            """
+            result = self.__run_query(query, variables)
+            issue_data = result.get("data", {}).get("updateIssue", {}).get("issue")
+            
+        # 更新されたIssueデータがない場合
+        if not issue_data:
+            return None
+            
+        # プロジェクトステータスを更新する場合
+        if project_status is not None:
+            # 1. まずIssueのプロジェクトアイテムIDを取得
+            query = """
+                query GetProjectItemId($issueId: ID!) {
+                    node(id: $issueId) {
+                        ... on Issue {
+                            projectItems(first: 1) {
+                                nodes {
+                                    id
+                                    project {
+                                        id
+                                        number
+                                    }
+                                    fieldValues(first: 20) {
+                                        nodes {
+                                            ... on ProjectV2ItemFieldSingleSelectValue {
+                                                name
+                                                field {
+                                                    ... on ProjectV2SingleSelectField {
+                                                        id
+                                                        name
+                                                        options {
+                                                            id
+                                                            name
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            """
+            result = self.__run_query(query, {"issueId": issue_id})
+            
+            project_item_id = None
+            status_field_id = None
+            option_id = None
+            project_items = []
+            
+            if result.get("data") and result["data"].get("node") and result["data"]["node"].get("projectItems"):
+                project_items = result["data"]["node"]["projectItems"].get("nodes", [])
+                if project_items and len(project_items) > 0 and project_items[0] is not None:
+                    project_item_id = project_items[0].get("id")
+                    
+                    # ステータスフィールドとオプションを見つける
+                    field_values = project_items[0].get("fieldValues", {}).get("nodes", [])
+                    for field_value in field_values:
+                        if field_value and field_value.get("field") and field_value["field"].get("name") and "status" in field_value["field"]["name"].lower():
+                            status_field_id = field_value["field"].get("id")
+                            options = field_value["field"].get("options", [])
+                            for option in options:
+                                if option and option.get("name") and option["name"].lower() == project_status.lower():
+                                    option_id = option.get("id")
+                                    break
+                            break
+            
+            # 2. プロジェクトアイテムのステータスを更新
+            if project_item_id and status_field_id and option_id:
+                update_query = """
+                    mutation UpdateProjectV2ItemFieldValue($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                        updateProjectV2ItemFieldValue(
+                            input: {
+                                projectId: $projectId,
+                                itemId: $itemId,
+                                fieldId: $fieldId,
+                                value: { singleSelectOptionId: $optionId }
+                            }
+                        ) {
+                            projectV2Item {
+                                id
+                            }
+                        }
+                    }
+                """
+                project_id = None
+                if project_items and len(project_items) > 0 and project_items[0] is not None and project_items[0].get("project") is not None:
+                    project_id = project_items[0]["project"].get("id")
+                
+                if project_id:
+                    update_result = self.__run_query(update_query, {
+                        "projectId": project_id,
+                        "itemId": project_item_id,
+                        "fieldId": status_field_id,
+                        "optionId": option_id
+                    })
+                    
+                    if update_result and update_result.get("data") and update_result["data"].get("updateProjectV2ItemFieldValue"):
+                        updated_project_status = project_status
+    
+        # ラベル情報の抽出
+        issue_labels = []
+        if issue_data.get("labels") and issue_data["labels"].get("nodes"):
+            issue_labels = [label["name"] for label in issue_data["labels"]["nodes"]]
+            
+        # IssueDataオブジェクトに変換して返す
+        return IssueData(
+            id=issue_data["id"],
+            title=issue_data["title"],
+            description=issue_data["body"] or "",
+            url=issue_data["url"],
+            status=issue_data["state"],
+            created_at=datetime.fromisoformat(issue_data.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+            updated_at=datetime.fromisoformat(issue_data.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+            labels=issue_labels,
+            project_status=updated_project_status
+        )

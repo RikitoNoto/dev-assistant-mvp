@@ -269,3 +269,90 @@ def delete_issue(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete issue: {str(e)}",
         )
+
+
+class GitHubIssueUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    project_status: Optional[str] = None
+
+
+@router.patch("/{project_id}/github/{issue_id}", response_model=GitHubIssueResponse)
+def update_github_issue(
+    issue_data: GitHubIssueUpdate,
+    project_id: str = Path(..., description="The ID of the local project"),
+    issue_id: str = Path(..., description="The ID of the GitHub issue"),
+):
+    """
+    GitHubのIssueを編集します。
+    
+    Args:
+        project_id: ローカルプロジェクトID
+        issue_id: 編集するGitHub IssueのID
+        issue_data: 更新するデータ（タイトル、説明、ステータス）
+        
+    Returns:
+        GitHubIssueResponse: 更新されたGitHub Issueの情報
+    """
+    try:
+        # プロジェクトモデルをインポート
+        from models.project import Project
+        
+        # プロジェクトを取得
+        project = Project.find_by_id(project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with ID '{project_id}' not found."
+            )
+        
+        # GitHubプロジェクトIDが設定されているか確認
+        if not project.github_project_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project with ID '{project_id}' is not linked to a GitHub project."
+            )
+        
+        # GitHubリポジトリインスタンスを取得
+        github_repo = get_github_repository()
+        
+        # GitHub Issueを更新
+        updated_issue = github_repo.update_issue(
+            issue_id=issue_id,
+            title=issue_data.title,
+            description=issue_data.description,
+            status=issue_data.status,
+            project_status=issue_data.project_status
+        )
+        
+        if not updated_issue:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"GitHub Issue with ID '{issue_id}' not found or could not be updated."
+            )
+        
+        # レスポンスモデルに変換して返す
+        return GitHubIssueResponse(
+            id=updated_issue.id,
+            title=updated_issue.title,
+            description=updated_issue.description,
+            url=updated_issue.url,
+            status=updated_issue.status,
+            created_at=updated_issue.created_at,
+            updated_at=updated_issue.updated_at,
+            labels=updated_issue.labels,
+            project_status=updated_issue.project_status
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update GitHub issue: {str(e)}",
+        )
