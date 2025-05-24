@@ -14,6 +14,7 @@ class IssueData:
     created_at: datetime
     updated_at: datetime
     labels: List[str] = field(default_factory=list)
+    project_status: Optional[str] = None
     
 
 class IssuesRepository(ABC):

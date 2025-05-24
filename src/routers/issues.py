@@ -75,6 +75,7 @@ class GitHubIssueResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     labels: List[str] = []
+    project_status: Optional[str] = None
 
 
 @router.get("/{project_id}/github", response_model=List[GitHubIssueResponse])
@@ -142,7 +143,8 @@ def get_github_issues(
                 status=issue.status,
                 created_at=issue.created_at,
                 updated_at=issue.updated_at,
-                labels=issue.labels
+                labels=issue.labels,
+                project_status=issue.project_status
             ))
         
         return response_issues

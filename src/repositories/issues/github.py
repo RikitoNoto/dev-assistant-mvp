@@ -165,6 +165,22 @@ class GitHubIssuesRepository(IssuesRepository):
                                     login
                                 }}
                             }}
+                            projectItems(first: 1) {{
+                                nodes {{
+                                    project {{
+                                        id
+                                        title
+                                    }}
+                                    fieldValues(first: 8) {{
+                                        nodes {{
+                                            __typename
+                                            ... on ProjectV2ItemFieldSingleSelectValue {{
+                                                name
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
                         }}
                         pageInfo {{
                             hasNextPage
@@ -255,6 +271,18 @@ class GitHubIssuesRepository(IssuesRepository):
                     if issue.get("labels") and issue["labels"].get("nodes"):
                         issue_labels = [label["name"] for label in issue["labels"]["nodes"]]
                     
+                    # プロジェクトステータス情報の抽出
+                    project_status = None
+                    if issue.get("projectItems") and issue["projectItems"].get("nodes"):
+                        project_items = issue["projectItems"]["nodes"]
+                        for project_item in project_items:
+                            if project_item.get("fieldValues") and project_item["fieldValues"].get("nodes"):
+                                for field_value in project_item["fieldValues"]["nodes"]:
+                                    # ProjectV2ItemFieldSingleSelectValue を使用
+                                    if field_value and "name" in field_value and field_value.get("__typename") == "ProjectV2ItemFieldSingleSelectValue":
+                                        project_status = field_value["name"]
+                                        break
+                    
                     issue_data = IssueData(
                         id=issue["id"],
                         title=issue["title"],
@@ -263,7 +291,8 @@ class GitHubIssuesRepository(IssuesRepository):
                         status=issue["state"],
                         created_at=datetime.fromisoformat(issue.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
                         updated_at=datetime.fromisoformat(issue.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00')),
-                        labels=issue_labels
+                        labels=issue_labels,
+                        project_status=project_status
                     )
                     all_issues.append(issue_data)
             except Exception as e:
