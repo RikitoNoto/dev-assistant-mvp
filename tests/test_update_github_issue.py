@@ -70,7 +70,7 @@ class TestUpdateGitHubIssue:
                 # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
                 with patch('models.project.Project.find_by_id', return_value=mock_project):
                     # APIエンドポイントを呼び出す
-                    response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+                    response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
                     
                     # レスポンスを検証
                     assert response.status_code == status.HTTP_200_OK
@@ -140,7 +140,7 @@ class TestUpdateGitHubIssue:
                 # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
                 with patch('models.project.Project.find_by_id', return_value=mock_project):
                     # APIエンドポイントを呼び出す
-                    response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+                    response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
                     
                     # レスポンスを検証
                     assert response.status_code == status.HTTP_200_OK
@@ -178,7 +178,7 @@ class TestUpdateGitHubIssue:
         # Project.find_by_idをパッチして、Noneを返すようにする（プロジェクトが見つからない）
         with patch('models.project.Project.find_by_id', return_value=None):
             # APIエンドポイントを呼び出す
-            response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+            response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
             
             # レスポンスを検証
             assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -207,7 +207,7 @@ class TestUpdateGitHubIssue:
         # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
         with patch('models.project.Project.find_by_id', return_value=mock_project):
             # APIエンドポイントを呼び出す
-            response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+            response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
             
             # レスポンスを検証
             assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -245,7 +245,7 @@ class TestUpdateGitHubIssue:
                 # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
                 with patch('models.project.Project.find_by_id', return_value=mock_project):
                     # APIエンドポイントを呼び出す
-                    response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+                    response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
                     
                     # レスポンスを検証
                     assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -282,7 +282,7 @@ class TestUpdateGitHubIssue:
                 # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
                 with patch('models.project.Project.find_by_id', return_value=mock_project):
                     # APIエンドポイントを呼び出す
-                    response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+                    response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
                     
                     # レスポンスを検証
                     assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -320,7 +320,7 @@ class TestUpdateGitHubIssue:
                 # Project.find_by_idをパッチして、モックプロジェクトを返すようにする
                 with patch('models.project.Project.find_by_id', return_value=mock_project):
                     # APIエンドポイントを呼び出す
-                    response = client.patch(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
+                    response = client.put(f"/issues/{project_id}/github/{issue_id}", json=issue_data)
                     
                     # レスポンスを検証
                     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
