@@ -104,13 +104,45 @@ async def chat_issue_stream(chat_and_edit_param: ChatAndEdit):
         tech_spec=tech_spec.content if tech_spec else "",
     )
     issues = Issue.find_by_project_id(chat_and_edit_param.project_id)
+    
+    # Check if the project has GitHub integration
+    from models.project import Project
+    import os
+    from repositories.issues.github import GitHubIssuesRepository
+    
+    project = Project.find_by_id(chat_and_edit_param.project_id)
+    github_issues = []
+    
+    if project and project.github_project_id:
+        # Project has GitHub integration, fetch GitHub issues
+        github_token = os.getenv("GITHUB_TOKEN")
+        if github_token:
+            try:
+                github_repo = GitHubIssuesRepository(token=github_token)
+                github_issues = [
+                    Issue(
+                        issue_id=issue.id,
+                        project_id=chat_and_edit_param.project_id,
+                        title=issue.title,
+                        description=issue.description,
+                        status=issue.status,
+                        created_at=issue.created_at,
+                        updated_at=issue.updated_at,
+                    )
+                    for issue in github_repo.fetch_issues(project_id=project.github_project_id)
+                ]
+            except Exception as e:
+                print(f"Error fetching GitHub issues: {str(e)}")
+    
+    # Combine local and GitHub issues
+    all_issues = issues + github_issues
 
     return StreamingResponse(
         process_stream(
             bot,
             chat_and_edit_param.message,
             history=chat_and_edit_param.history if chat_and_edit_param.history else [],
-            current_issues=issues,
+            current_issues=all_issues,
         ),
         media_type="application/x-ndjson",
     )
