@@ -8,11 +8,8 @@ from issue_generator import IssueGenerator
 from models.issue import Issue
 from models.models import ChatAndEdit
 from models.document import PlanDocument, TechSpecDocument
-from routers.utils import (
-    get_plan_document_repository,
-    get_tech_spec_document_repository,
-    get_issue_repository,  # get_issue_document_repository から変更
-)
+from models.project import Project
+from routers.issues import get_github_repository
 
 router = APIRouter()
 
@@ -104,13 +101,38 @@ async def chat_issue_stream(chat_and_edit_param: ChatAndEdit):
         tech_spec=tech_spec.content if tech_spec else "",
     )
     issues = Issue.find_by_project_id(chat_and_edit_param.project_id)
+        
+    project = Project.find_by_id(chat_and_edit_param.project_id)
+    github_issues = []
+    
+    if project and project.github_project_id:
+        # Project has GitHub integration, fetch GitHub issues
+        try:
+            github_repo = get_github_repository()
+            github_issues = [
+                Issue(
+                    issue_id=issue.id,
+                    project_id=chat_and_edit_param.project_id,
+                    title=issue.title,
+                    description=issue.description,
+                    status=issue.status,
+                    created_at=issue.created_at,
+                    updated_at=issue.updated_at,
+                )
+                for issue in github_repo.fetch_issues(project_id=project.github_project_id)
+            ]
+        except Exception as e:
+            print(f"Error fetching GitHub issues: {str(e)}")
+    
+    # Combine local and GitHub issues
+    all_issues = issues + github_issues
 
     return StreamingResponse(
         process_stream(
             bot,
             chat_and_edit_param.message,
             history=chat_and_edit_param.history if chat_and_edit_param.history else [],
-            current_issues=issues,
+            current_issues=all_issues,
         ),
         media_type="application/x-ndjson",
     )
