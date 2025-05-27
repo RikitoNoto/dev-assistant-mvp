@@ -12,7 +12,7 @@ from typing import Optional
 load_dotenv()
 
 
-class IssueGenerator(Chatbot):
+class IssueTitleGenerator(Chatbot):
     """
     イシュー生成を支援するチャットボットクラス。
     """
@@ -90,10 +90,60 @@ class IssueGenerator(Chatbot):
             yield chunk
         self.__last_message = response
 
-    def is_finished(self) -> bool:
+
+class IssueContentGenerator(Chatbot):
+    """
+    イシュー内容生成を支援するチャットボットクラス。
+    """
+
+    def __init__(self, plan: str, tech_spec: str):
+        self.__last_message: Optional[str] = None
+        self.__plan = plan
+        self.__tech_spec = tech_spec
+        super().__init__()
+
+    @property
+    def _model(self):
         """
-        企画が完了したかどうかを判定するメソッド。
+        モデルのプロパティを取得する抽象メソッド。
         """
-        if self.__last_message is None:
-            return False
-        return self.__last_message.startswith("[完了]")
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            streaming=True,
+            temperature=0.7,
+        )
+
+    @property
+    def _SYSTEM_MESSAGE_PROMPT(self) -> str:
+        return f"""
+        あなたは企画と技術仕様とイシュータイトルからエンジニアが実行可能な具体的なイシュー内容を生成するアシスタントです
+        イシューは具体的にエンジニアが何をすべきなのかがわかるようにしてください
+        内容はINVEST原則に従ってください
+
+        ## output
+        - ユーザーへのメッセージの後に「===============」を出力しイシューの内容を記載
+
+        ## 企画
+        {self.__plan}
+        ## 技術仕様
+        {self.__tech_spec}
+        """
+
+    async def stream(self, user_message: str, history: list = None, **kwargs):
+        response = ""
+        issue_title = kwargs.get("issue_title", "")
+        kwargs.pop("issue_title", None)
+
+        message = f"""
+        ## イシュータイトル
+        {issue_title}
+        ## user message
+        {user_message}
+        """
+        # Pass the constructed message and the history to the base class stream method
+        async for chunk in super().stream(message, history=history, **kwargs):
+            response += chunk
+            yield chunk
+        self.__last_message = response
+
