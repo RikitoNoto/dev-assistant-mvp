@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, Path, Query, Depends
-from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, status, Path, Query
+from typing import List, Optional
 from pydantic import BaseModel
 from models.issue import Issue
 import os
 from datetime import datetime
 from repositories.issues.github import GitHubIssuesRepository
-from repositories.issues.issues_repository import IssueData
 
 router = APIRouter()
 
@@ -463,7 +462,6 @@ def update_github_issue(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update GitHub issue: {str(e)}",
         )
-
 
 @router.delete("/{project_id}/github/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_github_issue(
