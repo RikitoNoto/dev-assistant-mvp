@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from chatbot import Chatbot
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -9,11 +11,13 @@ from models.document import PlanDocument, TechSpecDocument
 from models.project import Project
 from planner import PlannerBot
 from routers.issues import get_github_repository
+from routers.utils import DEBUG
 from tech_spec import TechSpecBot
-from typing import Optional
+from repositories.issues.github import GitHubIssuesRepository
 
 router = APIRouter()
 
+logger = logging.getLogger("uvicorn")
 
 async def process_stream(bot: Chatbot, message: str, history: list = None, **kwargs):
     """
@@ -21,12 +25,16 @@ async def process_stream(bot: Chatbot, message: str, history: list = None, **kwa
     Detects the separator '===============' to switch keys.
     Accepts an optional history list.
     """
+    if DEBUG:
+        logger.info(f"Processing stream with message: {message}")
+    all_chunks: list[str] = []
     buffer = ""
     is_file_content = False
     separator = "==============="
 
     async for chunk in bot.stream(message, history=history, **kwargs):
         buffer += chunk
+        all_chunks.append(chunk)
 
         while True:
             if is_file_content:
@@ -69,7 +77,9 @@ async def process_stream(bot: Chatbot, message: str, history: list = None, **kwa
     if buffer:
         key = "file" if is_file_content else "message"
         yield json.dumps({key: buffer}, ensure_ascii=False) + "\\n"
-
+    
+    if DEBUG:
+        logger.info(f"Output: {''.join(all_chunks)}")
 
 @router.post("/plan/stream")
 async def chat_plan_stream(chat_and_edit_param: ChatAndEdit):
@@ -175,9 +185,70 @@ async def generate_issue_content_stream(issue_id: str, chat_and_edit_param: Chat
             chat_and_edit_param.message,
             history=chat_and_edit_param.history if chat_and_edit_param.history else [],
             issue_title=issue.title,
+            issue_str=issue.description,
         ),
         media_type="application/x-ndjson",
     )
+
+
+@router.post("/issue-content/github/{issue_id}/stream")
+async def generate_github_issue_content_stream(issue_id: str, chat_and_edit_param: ChatAndEdit):
+    """
+    Stream GitHub issue content generation responses from IssueContentGenerator in JSON format (ndjson).
+    
+    Args:
+        issue_id: The ID of the GitHub issue to generate content for
+        chat_and_edit_param: ChatAndEdit containing project_id, message, and optional chat history
+        
+    Returns:
+        StreamingResponse: A streaming response containing the generated issue content
+    """
+    # Get GitHub token from environment
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if not github_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub token not configured."
+        )
+    
+    # Initialize GitHub repository
+    github_repo = GitHubIssuesRepository(github_token)
+    
+    try:
+        # Get GitHub issue using the find_by_id method
+        issue = github_repo.find_by_id(issue_id)
+        if issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"GitHub issue with ID '{issue_id}' not found."
+            )
+        
+        # Get plan and tech spec documents for the project
+        plan = PlanDocument.find_by_id(chat_and_edit_param.project_id)
+        tech_spec = TechSpecDocument.find_by_id(chat_and_edit_param.project_id)
+        
+        # Initialize the IssueContentGenerator with plan and tech spec
+        content_generator = IssueContentGenerator(
+            plan=plan.content if plan else "",
+            tech_spec=tech_spec.content if tech_spec else "",
+        )
+        
+        # Return a streaming response
+        return StreamingResponse(
+            process_stream(
+                content_generator,
+                chat_and_edit_param.message,
+                history=chat_and_edit_param.history if chat_and_edit_param.history else [],
+                issue_title=issue.title,
+                issue_str=issue.description,
+            ),
+            media_type="application/x-ndjson",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving GitHub issue: {str(e)}"
+        )
 
 
 

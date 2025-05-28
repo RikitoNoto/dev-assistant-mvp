@@ -133,11 +133,15 @@ class IssueContentGenerator(Chatbot):
     async def stream(self, user_message: str, history: list = None, **kwargs):
         response = ""
         issue_title = kwargs.get("issue_title", "")
-        kwargs.pop("issue_title", None)
+        kwargs.pop("issue_title", "")
+        issue_str = kwargs.get("issue_str", "")
+        kwargs.pop("issue_str", "")
 
         message = f"""
         ## イシュータイトル
         {issue_title}
+        ## 現在のイシュー
+        {issue_str}
         ## user message
         {user_message}
         """
