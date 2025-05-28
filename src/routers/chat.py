@@ -185,6 +185,7 @@ async def generate_issue_content_stream(issue_id: str, chat_and_edit_param: Chat
             chat_and_edit_param.message,
             history=chat_and_edit_param.history if chat_and_edit_param.history else [],
             issue_title=issue.title,
+            issue_str=issue.description,
         ),
         media_type="application/x-ndjson",
     )
@@ -239,6 +240,7 @@ async def generate_github_issue_content_stream(issue_id: str, chat_and_edit_para
                 chat_and_edit_param.message,
                 history=chat_and_edit_param.history if chat_and_edit_param.history else [],
                 issue_title=issue.title,
+                issue_str=issue.description,
             ),
             media_type="application/x-ndjson",
         )
