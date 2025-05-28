@@ -800,6 +800,67 @@ class GitHubIssuesRepository(IssuesRepository):
             project_status=updated_project_status
         )
     
+    def find_by_id(self, issue_id: str) -> Optional[IssueData]:
+        """
+        IDを使用してGitHub Issueを取得します。
+        
+        Args:
+            issue_id: 取得するIssueのID
+            
+        Returns:
+            Optional[IssueData]: 取得したIssueのデータ。見つからない場合はNone。
+        """
+        query = """
+            query GetIssue($issueId: ID!) {
+                node(id: $issueId) {
+                    ... on Issue {
+                        id
+                        title
+                        body
+                        state
+                        url
+                        createdAt
+                        updatedAt
+                        labels(first: 10) {
+                            nodes {
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        """
+        
+        variables = {"issueId": issue_id}
+        
+        try:
+            result = self.__run_query(query, variables)
+            if not result.get("data") or not result["data"].get("node"):
+                return None
+            
+            issue_data = result["data"]["node"]
+            
+            # ラベル情報の抽出
+            issue_labels = []
+            if issue_data.get("labels") and issue_data["labels"].get("nodes"):
+                issue_labels = [label["name"] for label in issue_data["labels"]["nodes"]]
+            
+            # IssueDataオブジェクトに変換して返す
+            return IssueData(
+                id=issue_data["id"],
+                title=issue_data["title"],
+                description=issue_data["body"] or "",
+                url=issue_data["url"],
+                status=issue_data["state"],
+                created_at=datetime.fromisoformat(issue_data.get("createdAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                updated_at=datetime.fromisoformat(issue_data.get("updatedAt", datetime.now().isoformat()).replace('Z', '+00:00')),
+                labels=issue_labels,
+                project_status=None
+            )
+        except Exception as e:
+            print(f"Error finding issue: {str(e)}")
+            return None
+    
     def delete_issue(self, issue_id: str) -> bool:
         """
         GitHubのIssueを削除します。

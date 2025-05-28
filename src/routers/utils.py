@@ -1,3 +1,4 @@
+import os
 from repositories.data.documents import (
     PlanDocumentRepository,
     TechSpecDocumentRepository,
@@ -12,6 +13,8 @@ from repositories.data.issues import IssueRepository, DynamoDbIssueRepository
 
 _project_repository_instance = None
 
+
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 
 def get_project_repository() -> ProjectRepository:
     """Returns a singleton instance of the DynamoDbProjectRepository."""
