@@ -1,5 +1,19 @@
 version: '3'
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_REGION=us-east-1
+    depends_on:
+      - dynamodb-local
+
   dynamodb-local:
     image: amazon/dynamodb-local
     ports:
@@ -7,6 +21,7 @@ services:
     volumes:
       - "./data:/data"
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
+
   dynamodb-admin:
     image: aaronshaf/dynamodb-admin
     ports:
