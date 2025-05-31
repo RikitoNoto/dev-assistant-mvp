@@ -90,12 +90,14 @@ class DynamoDbIssueRepository(IssueRepository):
         if dynamodb_resource:
             self._dynamodb = dynamodb_resource
         else:
+            # 環境変数からDynamoDB設定を取得
+            from config import DYNAMODB_ENDPOINT, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
             self._dynamodb = boto3.resource(
                 "dynamodb",
-                endpoint_url="http://localhost:8000",
-                region_name="us-west-2",
-                aws_access_key_id="dummy",
-                aws_secret_access_key="dummy",
+                endpoint_url=DYNAMODB_ENDPOINT,
+                region_name=AWS_REGION,
+                aws_access_key_id=AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             )
         self._table_name = table_name  # table_nameをインスタンス変数として保存
         self._table = self._dynamodb.Table(table_name)
